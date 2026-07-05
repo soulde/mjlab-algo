@@ -13,6 +13,8 @@ setup(
     "console_scripts": [
       "tdmpc2-train = mjlab_algo.scripts.tdmpc2.train:main",
       "tdmpc2-play = mjlab_algo.scripts.tdmpc2.play:main",
+      "fastsac-train = mjlab_algo.scripts.fastsac.train:main",
+      "fastsac-play = mjlab_algo.scripts.fastsac.play:main",
     ]
   },
 )
