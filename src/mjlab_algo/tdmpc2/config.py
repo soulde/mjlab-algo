@@ -200,6 +200,8 @@ class TDMPC2Config:
     """Whether to use torch.compile for update and planning."""
     seed: int = 1
     """Random seed."""
+    device: str | None = None
+    """Device override. If unset, uses cuda:0 when available, otherwise cpu."""
 
     # ── Convenience (populated at runtime) ─────────────────────────
     work_dir: str = ""

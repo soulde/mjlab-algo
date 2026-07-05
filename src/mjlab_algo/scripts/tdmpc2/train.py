@@ -5,7 +5,7 @@ CLI-driven training entry point using tyro.
 
 import random
 import sys
-from dataclasses import dataclass
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
@@ -17,51 +17,29 @@ from mjlab.envs import ManagerBasedRlEnv
 from mjlab_algo.tdmpc2 import (
     TDMPC2,
     Buffer,
+    MODEL_SIZE,
+    TDMPC2Config,
     TDMPC2Runner,
     make_tdmpc2_config,
 )
 from mjlab_algo.tdmpc2.vecenv_wrapper import TDMPC2VecEnvWrapper
+from mjlab_algo.registry import load_tdmpc2_cfg
 from mjlab_algo.scripts._cli import maybe_print_top_level_help
 from mjlab.tasks.registry import list_tasks, load_env_cfg
 from mjlab.utils.torch import configure_torch_backends
 
 
-@dataclass(frozen=True)
-class TrainArgs:
-    """CLI arguments for TD-MPC2 training."""
-
-    task_id: str = ""
-    """Task ID (e.g., ``Mjlab-Cartpole-Balance``)."""
-    model_size: int | None = 5
-    """Model size preset: 1, 5, 19, 48, or 317."""
-    steps: int = 1_000_000
-    """Total environment steps."""
-    seed: int = 1
-    """Random seed."""
-    log_root: str = "logs/tdmpc2"
-    """Root directory for logs."""
-    exp_name: str = "default"
-    """Experiment name."""
-    device: str | None = None
-    """Device override (default: cuda:0 if available)."""
-    mpc: bool = True
-    """Whether to use MPPI planning."""
-    compile: bool = True
-    """Whether to use torch.compile."""
-    wandb_project: str = "mjlab"
-    """W&B project name."""
-    enable_wandb: bool = True
-    """Enable W&B logging."""
-    save_video: bool = False
-    """Record evaluation videos."""
-    episodic: bool = False
-    """Whether the task has early termination."""
-    lr: float = 3e-4
-    """Learning rate override."""
-    batch_size: int = 256
-    """Batch size."""
-    buffer_size: int = 1_000_000
-    """Replay buffer capacity."""
+def _apply_model_size_from_cfg(cfg: TDMPC2Config) -> TDMPC2Config:
+    """Apply a model-size preset after CLI overrides are parsed."""
+    if cfg.model_size is None:
+        return cfg
+    overrides = asdict(cfg)
+    model_size = overrides.pop("model_size")
+    for field_name in {key for preset in MODEL_SIZE.values() for key in preset}:
+        overrides.pop(field_name, None)
+    new_cfg = make_tdmpc2_config(model_size=model_size, **overrides)
+    new_cfg.model_size = model_size
+    return new_cfg
 
 
 def main():
@@ -80,40 +58,23 @@ def main():
         return_unknown_args=True,
     )
 
-    args = tyro.cli(
-        TrainArgs,
+    cfg = tyro.cli(
+        TDMPC2Config,
         args=remaining_args,
-        default=TrainArgs(task_id=chosen_task),
+        default=load_tdmpc2_cfg(chosen_task),
         prog=sys.argv[0] + f" {chosen_task}",
     )
+    cfg.task = chosen_task
+    cfg = _apply_model_size_from_cfg(cfg)
 
     configure_torch_backends()
 
     # Load environment config from task registry.
-    env_cfg = load_env_cfg(args.task_id)
-
-    # Build TD-MPC2 config with model size preset and CLI overrides.
-    cfg = make_tdmpc2_config(
-        model_size=args.model_size,
-        task=args.task_id,
-        steps=args.steps,
-        seed=args.seed,
-        log_root=args.log_root,
-        exp_name=args.exp_name,
-        mpc=args.mpc,
-        compile=args.compile,
-        wandb_project=args.wandb_project,
-        enable_wandb=args.enable_wandb,
-        save_video=args.save_video,
-        episodic=args.episodic,
-        lr=args.lr,
-        batch_size=args.batch_size,
-        buffer_size=args.buffer_size,
-    )
+    env_cfg = load_env_cfg(cfg.task)
 
     # Set convenience fields.
     cfg.bin_size = (cfg.vmax - cfg.vmin) / (cfg.num_bins - 1)
-    cfg.task_title = args.task_id.replace("-", " ").title()
+    cfg.task_title = cfg.task.replace("-", " ").title()
     cfg.multitask = False
     cfg.task_dim = 0
 
@@ -127,7 +88,7 @@ def main():
     print(f"[INFO] Log directory: {log_dir}")
 
     # Create environment (use num_envs=1 for TD-MPC2).
-    device = args.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = cfg.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
     env_cfg.scene.num_envs = 1
     env = ManagerBasedRlEnv(cfg=env_cfg, device=device)
     env = TDMPC2VecEnvWrapper(env)

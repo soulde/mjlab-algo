@@ -7,6 +7,10 @@ Additional reinforcement learning algorithms for
 environment as `mjlab`, and it provides additional algorithm APIs and command
 line entry points without modifying the upstream `mjlab` repository.
 
+Algorithm defaults can be registered by task extension packages. For example,
+`mjlabplusplus` registers DR02 FastSAC and TD-MPC2 defaults from its
+`tasks/velocity/dr02/rl_cfg.py`, so the training command only needs the task ID.
+
 ## Algorithms
 
 - TD-MPC2
@@ -47,6 +51,7 @@ TD-MPC2:
 
 ```sh
 uv run tdmpc2-train Mjlab-Cartpole-Balance
+uv run tdmpc2-train Mjlab-Velocity-Flat-DR02
 uv run tdmpc2-play Mjlab-Cartpole-Balance --agent zero
 ```
 
@@ -54,7 +59,16 @@ FastSAC:
 
 ```sh
 uv run fastsac-train Mjlab-Cartpole-Balance
+uv run fastsac-train Mjlab-Velocity-Flat-DR02
 uv run fastsac-play Mjlab-Cartpole-Balance --agent zero
+```
+
+When a task has registered algorithm defaults, command-line flags are temporary
+overrides on top of that task config:
+
+```sh
+uv run fastsac-train Mjlab-Velocity-Flat-DR02 --total-steps 10000
+uv run tdmpc2-train Mjlab-Velocity-Flat-DR02 --steps 10000
 ```
 
 Run a short FastSAC smoke test:
@@ -85,6 +99,7 @@ Algorithm-specific imports:
 ```python
 from mjlab_algo.fastsac import FastSAC, FastSACReplayBuffer
 from mjlab_algo.fastsac import FastSACConfig, make_fastsac_config
+from mjlab_algo.registry import load_fastsac_cfg, load_tdmpc2_cfg
 from mjlab_algo.tdmpc2 import TDMPC2, TDMPC2Config, make_tdmpc2_config
 ```
 
@@ -106,6 +121,7 @@ src/mjlab_algo/
     tdmpc2.py
     vecenv_wrapper.py
     world_model.py
+  registry.py
   scripts/
     fastsac/
     tdmpc2/

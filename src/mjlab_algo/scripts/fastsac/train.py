@@ -2,7 +2,6 @@
 
 import random
 import sys
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -15,77 +14,34 @@ from mjlab.tasks.registry import list_tasks, load_env_cfg
 from mjlab.utils.torch import configure_torch_backends
 from mjlab_algo.fastsac import (
     FastSAC,
+    FastSACConfig,
     FastSACReplayBuffer,
     FastSACRunner,
-    make_fastsac_config,
 )
 from mjlab_algo.fastsac.vecenv_wrapper import FastSACVecEnvWrapper
+from mjlab_algo.registry import load_fastsac_cfg
 from mjlab_algo.scripts._cli import maybe_print_top_level_help
 
 
-@dataclass(frozen=True)
-class TrainArgs:
-    task_id: str = ""
-    total_steps: int = 1_000_000
-    num_envs: int = 1
-    seed: int = 1
-    log_root: str = "logs/fastsac"
-    exp_name: str = "default"
-    device: str | None = None
-    batch_size: int = 256
-    buffer_size: int = 1_000_000
-    learning_starts: int = 5_000
-    train_every: int = 1
-    gradient_steps: int = 1
-    gamma: float = 0.99
-    tau: float = 0.005
-    actor_lr: float = 3e-4
-    critic_lr: float = 3e-4
-    alpha_lr: float = 3e-4
-    save_agent: bool = True
-    save_interval: int = 100_000
-    log_interval: int = 1_000
-
-
-def launch_training(task_id: str, args: TrainArgs) -> None:
+def launch_training(task_id: str, cfg: FastSACConfig) -> None:
+    cfg.task = task_id
     configure_torch_backends()
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
+    random.seed(cfg.seed)
+    np.random.seed(cfg.seed)
+    torch.manual_seed(cfg.seed)
 
     env_cfg = load_env_cfg(task_id)
-    env_cfg.scene.num_envs = args.num_envs
-    env_cfg.seed = args.seed
-    device = args.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
+    env_cfg.scene.num_envs = cfg.num_envs
+    env_cfg.seed = cfg.seed
+    device = cfg.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
     env = ManagerBasedRlEnv(cfg=env_cfg, device=device)
     wrapped_env = FastSACVecEnvWrapper(env)
     obs = wrapped_env.reset()
 
-    cfg = make_fastsac_config(
-        task=task_id,
-        seed=args.seed,
-        total_steps=args.total_steps,
-        num_envs=args.num_envs,
-        batch_size=args.batch_size,
-        buffer_size=args.buffer_size,
-        learning_starts=args.learning_starts,
-        train_every=args.train_every,
-        gradient_steps=args.gradient_steps,
-        gamma=args.gamma,
-        tau=args.tau,
-        actor_lr=args.actor_lr,
-        critic_lr=args.critic_lr,
-        alpha_lr=args.alpha_lr,
-        save_agent=args.save_agent,
-        save_interval=args.save_interval,
-        log_interval=args.log_interval,
-        log_root=args.log_root,
-        exp_name=args.exp_name,
-        device=device,
-        obs_dim=obs.shape[-1],
-        action_dim=wrapped_env.action_dim,
-        episode_length=wrapped_env.unwrapped.max_episode_length,
-    )
+    cfg.device = device
+    cfg.obs_dim = obs.shape[-1]
+    cfg.action_dim = wrapped_env.action_dim
+    cfg.episode_length = wrapped_env.unwrapped.max_episode_length
     log_dir = (
         Path(cfg.log_root)
         / cfg.exp_name
@@ -124,9 +80,9 @@ def main():
         return_unknown_args=True,
     )
     args = tyro.cli(
-        TrainArgs,
+        FastSACConfig,
         args=remaining_args,
-        default=TrainArgs(task_id=chosen_task),
+        default=load_fastsac_cfg(chosen_task),
         prog=sys.argv[0] + f" {chosen_task}",
     )
     launch_training(chosen_task, args)
