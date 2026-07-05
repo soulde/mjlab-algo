@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=80", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mjlab-algo"
+version = "0.1.0"
+description = "Private MJLab extension package for additional RL algorithms."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+tdmpc2-train = "mjlab_algo.scripts.tdmpc2.train:main"
+tdmpc2-play = "mjlab_algo.scripts.tdmpc2.play:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.format]
+indent-style = "space"
+
+[dependency-groups]
+dev = [
+  "pytest>=9.0.0",
+  "ruff>=0.14.0",
+  "ty>=0.0.1a20",
+]
