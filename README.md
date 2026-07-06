@@ -130,8 +130,8 @@ src/mjlab_algo/
 ## Notes
 
 - TD-MPC2 uses single-environment training.
-- TD-MPC2 keeps `torch.compile` enabled by default and configures inductor to
-  avoid PyTorch 2.9's legacy/new TF32 API conflict in padded matmul benchmarks.
+- TD-MPC2 runs without `torch.compile` by default to avoid PyTorch 2.9
+  Inductor/TF32 compatibility issues.
 - FastSAC supports vectorized MJLab environments through its wrapper, but is
   intentionally single-process and lightweight.
 - Both algorithms flatten MJLab dict observations for their policy inputs.

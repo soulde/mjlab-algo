@@ -141,10 +141,17 @@ class TDMPC2Runner:
         """Create a TensorDict for a single timestep."""
         if action is None:
             action = torch.full_like(self.env.rand_act(), float("nan"))
+        action = action.to(obs.device)
         if reward is None:
-            reward = torch.tensor(float("nan"))
+            reward = torch.full((1,), float("nan"), device=obs.device)
+        else:
+            reward = reward.to(obs.device)
         if terminated is None:
-            terminated = torch.tensor(float("nan"))
+            terminated = torch.full((1,), float("nan"), device=obs.device)
+        elif isinstance(terminated, torch.Tensor):
+            terminated = terminated.to(obs.device)
+        else:
+            terminated = torch.tensor(float(terminated), device=obs.device)
         td = TensorDict(
             obs=obs.unsqueeze(0),
             action=action.unsqueeze(0),
@@ -169,7 +176,6 @@ class TDMPC2Runner:
             ep_reward = 0.0
             t = 0
             while not done:
-                torch.compiler.cudagraph_mark_step_begin()
                 action = self.agent.act(obs, t0=t == 0, eval_mode=True)
                 obs, reward, done, info = self.env.step(action)
                 ep_reward += float(reward.item())
@@ -215,7 +221,7 @@ class TDMPC2Runner:
                             "Set ``episodic=True`` to enable terminations."
                         )
                     train_metrics.update(
-                        episode_reward=torch.tensor(
+                        episode_reward=torch.stack(
                             [td["reward"] for td in self._tds[1:]]
                         ).sum(),
                         episode_success=float(info.get("success", 0.0)),
@@ -263,7 +269,7 @@ class TDMPC2Runner:
                 if len(self._tds) > 1:
                     log_metrics.setdefault(
                         "episode_reward",
-                        torch.tensor([td["reward"] for td in self._tds[1:]]).sum(),
+                        torch.stack([td["reward"] for td in self._tds[1:]]).sum(),
                     )
                     log_metrics.setdefault("episode_length", len(self._tds))
                     log_metrics.setdefault(

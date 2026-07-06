@@ -12,7 +12,6 @@ import torch.nn.functional as F
 from tensordict import TensorDict
 
 from mjlab_algo.tdmpc2 import math
-from mjlab_algo.tdmpc2.compile import configure_tdmpc2_compile
 from mjlab_algo.tdmpc2.layers import api_model_conversion
 from mjlab_algo.tdmpc2.scale import RunningScale
 from mjlab_algo.tdmpc2.world_model import WorldModel
@@ -69,22 +68,13 @@ class TDMPC2(torch.nn.Module):
         self._prev_mean = torch.nn.Buffer(
             torch.zeros(self.cfg.horizon, self.cfg.action_dim, device=self.device)
         )
-        if cfg.compile and torch.cuda.is_available():
-            configure_tdmpc2_compile(enabled=True)
-            print("Compiling update function with torch.compile...")
-            self._update = torch.compile(self._update, mode="reduce-overhead")
 
     @property
     def plan(self):
         _plan_val = getattr(self, "_plan_val", None)
         if _plan_val is not None:
             return _plan_val
-        if self.cfg.compile and torch.cuda.is_available():
-            configure_tdmpc2_compile(enabled=True)
-            plan = torch.compile(self._plan, mode="reduce-overhead")
-        else:
-            plan = self._plan
-        self._plan_val = plan
+        self._plan_val = self._plan
         return self._plan_val
 
     def _get_discount(self, episode_length: int) -> float:
@@ -458,5 +448,4 @@ class TDMPC2(torch.nn.Module):
         kwargs = {}
         if task is not None:
             kwargs["task"] = task
-        torch.compiler.cudagraph_mark_step_begin()
         return self._update(obs, action, reward, terminated, **kwargs)

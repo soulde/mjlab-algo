@@ -198,8 +198,6 @@ class TDMPC2Config:
     """Console logging frequency in environment steps."""
 
     # ── Misc ───────────────────────────────────────────────────────
-    compile: bool = True
-    """Whether to use torch.compile for update and planning."""
     seed: int = 1
     """Random seed."""
     device: str | None = None

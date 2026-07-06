@@ -1,13 +1,5 @@
 """TD-MPC2 algorithm package."""
 
-# ruff: noqa: E402
-
-from mjlab_algo.tdmpc2.compile import (
-    configure_tdmpc2_compile as configure_tdmpc2_compile,
-)
-
-configure_tdmpc2_compile(enabled=True)
-
 from mjlab_algo.tdmpc2.buffer import Buffer as Buffer
 from mjlab_algo.tdmpc2.config import (
     MODEL_SIZE as MODEL_SIZE,

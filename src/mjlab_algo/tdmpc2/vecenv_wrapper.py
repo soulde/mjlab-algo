@@ -64,7 +64,7 @@ class TDMPC2VecEnvWrapper:
 
     def rand_act(self) -> torch.Tensor:
         """Sample a random action from the action space."""
-        return 2 * torch.rand(self._action_dim) - 1
+        return 2 * torch.rand(self._action_dim, device=self.env.device) - 1
 
     def reset(self) -> torch.Tensor:
         """Reset environment and return flat observation."""
@@ -92,7 +92,7 @@ class TDMPC2VecEnvWrapper:
                 info.update(extras["log"])
             info["success"] = float(extras.get("success", 0.0))
             info["terminated"] = torch.tensor(
-                float(terminated.item()), dtype=torch.float32
+                float(terminated.item()), dtype=torch.float32, device=self.env.device
             )
             done = bool((terminated | truncated).item())
             obs = self._obs_to_tensor(obs_dict)
