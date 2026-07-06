@@ -194,6 +194,8 @@ class TDMPC2Config:
     """Whether to save model checkpoints."""
     log_root: str = "logs/tdmpc2"
     """Root directory for logs/checkpoints."""
+    log_freq: int = 1000
+    """Console logging frequency in environment steps."""
 
     # ── Misc ───────────────────────────────────────────────────────
     compile: bool = True

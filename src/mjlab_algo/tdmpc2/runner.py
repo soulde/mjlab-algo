@@ -11,6 +11,7 @@ import numpy as np
 import torch
 from tensordict import TensorDict
 
+from mjlab_algo.logging import format_training_log
 from mjlab_algo.tdmpc2.buffer import Buffer
 from mjlab_algo.tdmpc2.tdmpc2 import TDMPC2
 from mjlab_algo.tdmpc2.vecenv_wrapper import TDMPC2VecEnvWrapper
@@ -41,6 +42,7 @@ class TDMPC2Runner:
         self._step = 0
         self._ep_idx = 0
         self._start_time = time()
+        self._wandb = None
 
         self._setup_wandb()
 
@@ -60,9 +62,7 @@ class TDMPC2Runner:
                 config={
                     k: v for k, v in self.cfg.__dict__.items() if not k.startswith("_")
                 },
-                settings=wandb.Settings(silent="true")
-                if self.cfg.wandb_silent
-                else None,
+                settings=wandb.Settings(silent=True) if self.cfg.wandb_silent else None,
             )
             self._wandb = wandb
         except Exception:
@@ -85,18 +85,51 @@ class TDMPC2Runner:
             step = metrics.get("step", self._step)
             self._wandb.log(_d, step=step)
 
-        # Print key metrics
-        if category == "eval":
-            rew = metrics.get("episode_reward", 0.0)
-            print(f"  Eval | step: {metrics.get('step', 0):,} | reward: {rew:.2f}")
-        elif category == "train":
-            rew = metrics.get("episode_reward", 0.0)
-            print(
-                f"  Train | step: {metrics.get('step', 0):,} | "
-                f"ep: {metrics.get('episode', 0)} | "
-                f"reward: {rew:.2f} | "
-                f"SPS: {metrics.get('steps_per_second', 0):.0f}"
+        step = int(metrics.get("step", self._step))
+        elapsed = float(metrics.get("elapsed_time", time() - self._start_time))
+        eta = (
+            (self.cfg.steps - step) / max(step / max(elapsed, 1e-6), 1e-6)
+            if step > 0
+            else 0.0
+        )
+        title = (
+            f"TD-MPC2 eval step {step}/{self.cfg.steps}"
+            if category == "eval"
+            else f"TD-MPC2 step {step}/{self.cfg.steps}"
+        )
+        losses = {
+            key.removesuffix("_loss"): value
+            for key, value in metrics.items()
+            if key.endswith("_loss")
+        }
+        extras = {
+            "Episode": metrics.get("episode", self._ep_idx),
+            "Buffer episodes": self.buffer.num_eps,
+            "Success": metrics.get("episode_success", 0.0),
+        }
+        if "alpha" in metrics:
+            extras["Alpha"] = metrics["alpha"]
+        print(
+            format_training_log(
+                title=title,
+                total_steps=step,
+                steps_per_second=float(metrics.get("steps_per_second", 0.0)),
+                collection_time=float(metrics.get("collection_time", 0.0)),
+                learning_time=float(metrics.get("learning_time", 0.0)),
+                losses=losses,
+                mean_reward=float(metrics["episode_reward"])
+                if "episode_reward" in metrics
+                else None,
+                mean_episode_length=float(metrics["episode_length"])
+                if "episode_length" in metrics
+                else None,
+                extras=extras,
+                iteration_time=float(metrics.get("iteration_time", 0.0)),
+                elapsed_time=elapsed,
+                eta_seconds=eta,
+                log_dir=self.log_dir,
             )
+        )
 
     def _to_td(
         self,
@@ -126,10 +159,13 @@ class TDMPC2Runner:
         ep_rewards: list[float] = []
         ep_successes: list[float] = []
         ep_lengths: list[int] = []
+        if self.cfg.eval_episodes <= 0:
+            return {}
 
         for _i in range(self.cfg.eval_episodes):
             obs = self.env.reset()
             done = False
+            info: dict = {}
             ep_reward = 0.0
             t = 0
             while not done:
@@ -154,11 +190,12 @@ class TDMPC2Runner:
         done = True
         eval_next = False
         info: dict = {}
+        next_log_step = self.cfg.log_freq if self.cfg.log_freq > 0 else -1
 
         print(f"Training on device: {self.agent.device}")
         print(f"Log directory: {self.log_dir}")
 
-        while self._step <= self.cfg.steps:
+        while self._step < self.cfg.steps:
             # Evaluate periodically
             if self._step % self.cfg.eval_freq == 0:
                 eval_next = True
@@ -193,25 +230,50 @@ class TDMPC2Runner:
                 self._tds = [self._to_td(obs)]
 
             # Collect experience
+            collect_start = time()
             if self._step > self.cfg.seed_steps:
                 action = self.agent.act(obs, t0=len(self._tds) == 1)
             else:
                 action = self.env.rand_act()
             obs, reward, done, info = self.env.step(action)
             self._tds.append(self._to_td(obs, action, reward, info.get("terminated")))
+            collect_time = time() - collect_start
 
             # Update agent
+            learn_time = 0.0
             if self._step >= self.cfg.seed_steps:
                 if self._step == self.cfg.seed_steps:
                     num_updates = self.cfg.seed_steps
                     print("Pretraining agent on seed data...")
                 else:
                     num_updates = 1
+                learn_start = time()
+                _train_metrics = {}
                 for _ in range(num_updates):
                     _train_metrics = self.agent.update(self.buffer)
                 train_metrics.update(_train_metrics)
+                learn_time = time() - learn_start
+            train_metrics["collection_time"] = collect_time
+            train_metrics["learning_time"] = learn_time
+            train_metrics["iteration_time"] = collect_time + learn_time
 
             self._step += 1
+            if self.cfg.log_freq > 0 and self._step >= next_log_step:
+                log_metrics = dict(train_metrics)
+                if len(self._tds) > 1:
+                    log_metrics.setdefault(
+                        "episode_reward",
+                        torch.tensor([td["reward"] for td in self._tds[1:]]).sum(),
+                    )
+                    log_metrics.setdefault("episode_length", len(self._tds))
+                    log_metrics.setdefault(
+                        "episode_success",
+                        float(info.get("success", 0.0)),
+                    )
+                log_metrics.update(self._common_metrics())
+                self._log(log_metrics, "train")
+                while next_log_step <= self._step:
+                    next_log_step += self.cfg.log_freq
 
         self._finish()
 
