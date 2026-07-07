@@ -143,13 +143,13 @@ class TDMPC2Runner:
             action = torch.full_like(self.env.rand_act(), float("nan"))
         action = action.to(obs.device)
         if reward is None:
-            reward = torch.full((1,), float("nan"), device=obs.device)
+            reward = torch.tensor(float("nan"), device=obs.device)
         else:
-            reward = reward.to(obs.device)
+            reward = reward.to(obs.device).reshape(())
         if terminated is None:
-            terminated = torch.full((1,), float("nan"), device=obs.device)
+            terminated = torch.tensor(float("nan"), device=obs.device)
         elif isinstance(terminated, torch.Tensor):
-            terminated = terminated.to(obs.device)
+            terminated = terminated.to(obs.device).reshape(())
         else:
             terminated = torch.tensor(float(terminated), device=obs.device)
         td = TensorDict(
