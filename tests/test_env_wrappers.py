@@ -3,6 +3,7 @@ import torch
 
 from mmrl.env_wrappers.gymnasium import GymnasiumEnvWrapper
 from mmrl.env_wrappers.gym import GymEnvWrapper
+from mmrl.env_wrappers.isaaclab import IsaacLabEnvWrapper
 
 
 class _FakeBox:
@@ -84,3 +85,59 @@ def test_gym_wrapper_supports_classic_reset_and_step_api():
     assert reward.tolist() == [2.5]
     assert done.tolist() == [True]
     assert info == {"classic": 1}
+
+
+class _FakeIsaacLabEnv:
+    num_envs = 2
+    device = "cpu"
+    single_action_space = _FakeBox(
+        low=[-2.0, -4.0], high=[2.0, 4.0], shape=(2,)
+    )
+
+    def __init__(self):
+        self.unwrapped = self
+        self.last_action = None
+        self.closed = False
+
+    def reset(self):
+        return {
+            "policy": torch.tensor([[1.0, 2.0], [3.0, 4.0]]),
+            "privileged": torch.tensor([[5.0], [6.0]]),
+        }, {}
+
+    def step(self, action):
+        self.last_action = action
+        obs = {
+            "policy": torch.zeros(2, 2),
+            "privileged": torch.ones(2, 1),
+        }
+        reward = torch.tensor([1.0, 2.0])
+        terminated = torch.tensor([False, True])
+        truncated = torch.tensor([True, False])
+        return obs, reward, terminated, truncated, {"isaac": 1}
+
+    def close(self):
+        self.closed = True
+
+
+def test_isaaclab_wrapper_vectorized_dict_observations_and_action_scaling():
+    env = _FakeIsaacLabEnv()
+    wrapped = IsaacLabEnvWrapper(env, device="cpu")
+
+    obs = wrapped.reset()
+    next_obs, reward, done, info = wrapped.step(
+        torch.tensor([[-1.0, 1.0], [1.0, -1.0]])
+    )
+
+    assert wrapped.num_envs == 2
+    assert wrapped.obs_dim == 3
+    assert wrapped.action_dim == 2
+    assert obs.tolist() == [[1.0, 2.0, 5.0], [3.0, 4.0, 6.0]]
+    assert env.last_action.tolist() == [[-2.0, 4.0], [2.0, -4.0]]
+    assert next_obs.tolist() == [[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]]
+    assert reward.tolist() == [1.0, 2.0]
+    assert done.tolist() == [True, True]
+    assert info == {"isaac": 1}
+
+    wrapped.close()
+    assert env.closed
