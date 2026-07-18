@@ -4,6 +4,7 @@ from mmrl.tdmpc2 import (
     TDMPC2ModelCfg,
     TDMPC2RunnerCfg,
 )
+from mmrl.models import Model, WorldModel
 
 
 def test_tdmpc2_public_api_imports():
@@ -19,3 +20,4 @@ def test_tdmpc2_public_api_imports():
     assert cfg.steps == 10
     assert cfg.memory.capacity == 10
     assert TDMPC2 is not None
+    assert issubclass(WorldModel, Model)

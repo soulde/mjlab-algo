@@ -1,4 +1,4 @@
-"""Neural network building blocks for TD-MPC2.
+"""Neural network building blocks for the TD-MPC2 world model.
 
 Includes Ensemble (vectorized via vmap), SimNorm, NormedLinear, and
 encoder/decoder factory functions.

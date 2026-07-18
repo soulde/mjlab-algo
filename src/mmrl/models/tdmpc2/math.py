@@ -1,4 +1,4 @@
-"""Math utilities for TD-MPC2.
+"""Math utilities for the TD-MPC2 model and planner.
 
 Includes two-hot encoding, symlog/symexp transforms, Gaussian log-probability,
 and other distributional RL helpers.

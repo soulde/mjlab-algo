@@ -1,4 +1,4 @@
-"""Weight initialization for TD-MPC2."""
+"""Weight initialization for the TD-MPC2 world model."""
 
 import torch.nn as nn
 

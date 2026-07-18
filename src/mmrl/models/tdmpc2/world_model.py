@@ -11,10 +11,11 @@ import torch.nn as nn
 from tensordict import TensorDict
 from tensordict.nn import TensorDictParams
 
-from mmrl.tdmpc2 import init, layers, math
+from mmrl.models.tdmpc2 import init, layers, math
+from mmrl.models.base import Model
 
 
-class WorldModel(nn.Module):
+class WorldModel(Model):
     """TD-MPC2 implicit world model.
 
     Can be used for both single-task and multi-task experiments,

@@ -11,9 +11,9 @@ import torch
 import torch.nn.functional as F
 from tensordict import TensorDict
 
-from mmrl.tdmpc2 import math
+from mmrl.models.tdmpc2 import math
+from mmrl.models.tdmpc2.world_model import WorldModel
 from mmrl.tdmpc2.scale import RunningScale
-from mmrl.tdmpc2.world_model import WorldModel
 
 
 class TDMPC2(torch.nn.Module):
