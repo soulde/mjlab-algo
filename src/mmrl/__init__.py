@@ -15,10 +15,14 @@ from mmrl.fastsac import (
     make_fastsac_config,
 )
 from mmrl.registry import (
+    COMPONENTS,
+    ComponentRegistry,
+    build_component,
     load_fastsac_cfg,
     load_tdmpc2_cfg,
     register_fastsac_cfg,
     register_tdmpc2_cfg,
+    register_component,
 )
 from mmrl.tdmpc2.config import TDMPC2Config, make_tdmpc2_config
 
@@ -27,10 +31,13 @@ __all__ = [
     "FastSACConfig",
     "FastSACReplayBuffer",
     "FastSACRunner",
+    "COMPONENTS",
+    "ComponentRegistry",
     "TDMPC2",
     "TDMPC2Config",
     "TDMPC2Runner",
     "config_to_dict",
+    "build_component",
     "get_config_value",
     "load_fastsac_cfg",
     "load_tdmpc2_cfg",
@@ -38,6 +45,7 @@ __all__ = [
     "make_tdmpc2_config",
     "require_config_value",
     "register_fastsac_cfg",
+    "register_component",
     "register_tdmpc2_cfg",
     "resolve_class",
     "resolve_config_class",

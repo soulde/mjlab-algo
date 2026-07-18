@@ -1,5 +1,7 @@
 from mmrl.fastsac import FastSACConfig
 from mmrl.registry import (
+    ComponentRegistry,
+    build_component,
     load_fastsac_cfg,
     load_tdmpc2_cfg,
     register_fastsac_cfg,
@@ -38,3 +40,44 @@ def test_algorithm_cfg_registry_falls_back_to_task_defaults():
     assert isinstance(fastsac_cfg, FastSACConfig)
     assert tdmpc2_cfg.task == "Unregistered-TDMPC2-Task"
     assert isinstance(tdmpc2_cfg, TDMPC2Config)
+
+
+class _Component:
+    def __init__(self, width, device="cpu"):
+        self.width = width
+        self.device = device
+
+
+class _ConfiguredComponent:
+    def __init__(self, cfg, env):
+        self.cfg = cfg
+        self.env = env
+
+
+def test_component_registry_builds_from_isaaclab_style_config():
+    registry = ComponentRegistry()
+    registry.register("test", _Component)
+
+    class ComponentCfg:
+        class_name = "test"
+        width = 128
+        device = "cuda:0"
+
+    component = build_component(ComponentCfg(), registry=registry, device="cpu")
+
+    assert component.width == 128
+    assert component.device == "cpu"
+    assert registry.available() == ("test",)
+
+
+def test_component_builder_can_pass_complete_config():
+    registry = ComponentRegistry()
+    registry.register("configured", _ConfiguredComponent)
+    cfg = {"class_name": "configured", "nested": {"value": 3}}
+
+    component = build_component(
+        cfg, registry=registry, config_arg="cfg", env="environment"
+    )
+
+    assert component.cfg is cfg
+    assert component.env == "environment"
