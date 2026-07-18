@@ -14,6 +14,9 @@ register tasks, algorithms, or components in this package.
 
 ## Algorithms
 
+- PPO
+  - Native continuous-action implementation with clipped objectives, GAE,
+    adaptive-KL scheduling, and vectorized rollout collection.
 - TD-MPC2
   - Model-based RL implementation migrated from the original `tdmpc2` branch.
 - FastSAC
@@ -59,6 +62,7 @@ Top-level imports:
 ```python
 from mmrl import FastSAC, FastSACRunner, FastSACRunnerCfg
 from mmrl import TDMPC2, TDMPC2Runner, TDMPC2RunnerCfg
+from mmrl import PPO, PPORunner, PPORunnerCfg
 ```
 
 Algorithm-specific imports:
@@ -120,6 +124,8 @@ Examples:
 examples/gymnasium/
   fastsac_train.py
   fastsac_play.py
+  ppo_train.py
+  ppo_play.py
 ```
 
 ## Notes
@@ -129,6 +135,9 @@ examples/gymnasium/
   Inductor/TF32 compatibility issues.
 - FastSAC supports vectorized MJLab environments through its wrapper, but is
   intentionally single-process and lightweight.
+- PPO is implemented inside `mmrl` and has no runtime dependency on RSL-RL.
+  Its design was adapted from RSL-RL under BSD-3-Clause; the upstream license
+  is retained in `licenses/rsl_rl-BSD-3-Clause.txt`.
 - Both algorithms flatten MJLab dict observations for their policy inputs.
 
 ## Config Compatibility

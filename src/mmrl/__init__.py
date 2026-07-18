@@ -14,6 +14,15 @@ from mmrl.fastsac import (
     FastSACRunnerCfg,
     OffPolicyMemoryCfg,
 )
+from mmrl.ppo import (
+    ActorCritic,
+    PPO,
+    PPOActorCriticCfg,
+    PPOAlgorithmCfg,
+    PPOMemoryCfg,
+    PPORunner,
+    PPORunnerCfg,
+)
 from mmrl.tdmpc2.config import (
     EpisodeMemoryCfg,
     TDMPC2AlgorithmCfg,
@@ -29,6 +38,13 @@ __all__ = [
     "FastSACRunner",
     "FastSACRunnerCfg",
     "OffPolicyMemoryCfg",
+    "ActorCritic",
+    "PPO",
+    "PPOActorCriticCfg",
+    "PPOAlgorithmCfg",
+    "PPOMemoryCfg",
+    "PPORunner",
+    "PPORunnerCfg",
     "TDMPC2",
     "EpisodeMemoryCfg",
     "TDMPC2AlgorithmCfg",
