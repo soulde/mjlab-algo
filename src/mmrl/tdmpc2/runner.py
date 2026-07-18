@@ -260,7 +260,7 @@ class TDMPC2Runner(ModelBasedRunner):
             episode_length=np.nanmean(ep_lengths),
         )
 
-    def train(self) -> None:
+    def learn(self) -> None:
         """Run the main TD-MPC2 training loop."""
         train_metrics: dict = {}
         done = True

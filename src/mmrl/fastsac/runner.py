@@ -79,7 +79,7 @@ class FastSACRunner(OffPolicyRunner):
     def load(self, path: str | Path) -> None:
         self.agent.load(path)
 
-    def train(self) -> None:
+    def learn(self) -> None:
         obs = self.env.reset()
         step = 0
         last_metrics: dict[str, float] = {}

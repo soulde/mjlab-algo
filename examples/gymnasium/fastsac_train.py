@@ -59,7 +59,7 @@ def main() -> None:
 
     runner = FastSACRunner(wrapped_env, cfg, log_dir)
     try:
-        runner.train()
+        runner.learn()
     finally:
         wrapped_env.close()
 
