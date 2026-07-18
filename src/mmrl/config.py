@@ -1,7 +1,6 @@
 """Configuration helpers for dict, dataclass, and class-style configs."""
 
 from dataclasses import asdict, is_dataclass
-from importlib import import_module
 from typing import Any
 
 
@@ -49,29 +48,6 @@ def require_config_value(cfg: Any, path: str) -> Any:
     return value
 
 
-def resolve_class(class_name: str | type) -> type:
-    """Resolve a class object from a class or import path string."""
-    if isinstance(class_name, type):
-        return class_name
-    if not isinstance(class_name, str):
-        raise TypeError(f"class_name must be a class or string, got {type(class_name)!r}")
-    module_name, separator, attr_name = class_name.rpartition(".")
-    if not separator:
-        raise ValueError(
-            f"Class name {class_name!r} must be a fully qualified import path."
-        )
-    module = import_module(module_name)
-    resolved = getattr(module, attr_name)
-    if not isinstance(resolved, type):
-        raise TypeError(f"Resolved object {class_name!r} is not a class.")
-    return resolved
-
-
-def resolve_config_class(cfg: Any, path: str = "class_name") -> type:
-    """Resolve a class from a config object's ``class_name`` field."""
-    return resolve_class(require_config_value(cfg, path))
-
-
 def _public_config_items(mapping) -> dict[str, Any]:
     result = {}
     for key, value in mapping.items():
@@ -93,4 +69,3 @@ def _convert_value(value: Any) -> Any:
     if is_dataclass(value) or hasattr(value, "__dict__"):
         return config_to_dict(value)
     return value
-

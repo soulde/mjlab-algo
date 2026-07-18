@@ -8,9 +8,9 @@ environment as your simulator or environment framework, then write thin
 environment-specific `train.py` and `play.py` entry points that compose its
 wrappers, memories, agents, and runners.
 
-Algorithm defaults can be registered by task extension packages. For example,
-`mjlabplusplus` registers DR02 FastSAC and TD-MPC2 defaults from its
-`tasks/velocity/dr02/rl_cfg.py`, so the training command only needs the task ID.
+Environment packages own task-specific algorithm config classes. They pass a
+config instance and a wrapped environment into an `mmrl` runner; they do not
+register tasks, algorithms, or components in this package.
 
 ## Algorithms
 
@@ -46,45 +46,11 @@ uv pip install --python .venv/bin/python \
   git+https://github.com/soulde/mmrl.git
 ```
 
-## Command Line Usage
+## Entry Points
 
-TD-MPC2:
-
-```sh
-uv run tdmpc2-train Mjlab-Cartpole-Balance
-uv run tdmpc2-train Mjlab-Velocity-Flat-DR02
-uv run tdmpc2-play Mjlab-Cartpole-Balance --agent zero
-```
-
-FastSAC:
-
-```sh
-uv run fastsac-train Mjlab-Cartpole-Balance
-uv run fastsac-train Mjlab-Velocity-Flat-DR02
-uv run fastsac-play Mjlab-Cartpole-Balance --agent zero
-```
-
-When a task has registered algorithm defaults, command-line flags are temporary
-overrides on top of that task config:
-
-```sh
-uv run fastsac-train Mjlab-Velocity-Flat-DR02 --total-steps 10000
-uv run tdmpc2-train Mjlab-Velocity-Flat-DR02 --steps 10000
-```
-
-Run a short FastSAC smoke test:
-
-```sh
-uv run fastsac-train Mjlab-Cartpole-Balance \
-  --total-steps 4 \
-  --learning-starts 1 \
-  --batch-size 2 \
-  --buffer-size 16 \
-  --num-envs 1 \
-  --device cpu \
-  --log-interval 2 \
-  --no-save-agent
-```
+`mmrl` intentionally provides no training CLI. MJLab, IsaacLab, Gym, and
+Gymnasium packages construct their own environment and own their `train.py` and
+`play.py`. See `examples/gymnasium/` for the integration template.
 
 ## Python API
 
@@ -100,7 +66,6 @@ Algorithm-specific imports:
 ```python
 from mmrl.fastsac import FastSAC, FastSACReplayBuffer
 from mmrl.fastsac import FastSACConfig, make_fastsac_config
-from mmrl.registry import load_fastsac_cfg, load_tdmpc2_cfg
 from mmrl.tdmpc2 import TDMPC2, TDMPC2Config, make_tdmpc2_config
 ```
 
@@ -151,10 +116,6 @@ src/mmrl/
     tdmpc2.py
     vecenv_wrapper.py
     world_model.py
-  registry.py
-  scripts/
-    fastsac/
-    tdmpc2/
 ```
 
 Examples:
@@ -212,14 +173,14 @@ dataclasses only. It should support:
 - IsaacLab-style class configs with inherited class attributes
 
 YAML configuration is intentionally outside the framework boundary. Component
-selection remains Python-owned: ``class_name`` may be a class object, a fully
-qualified import path, or a short name resolved by a runner-local class map.
+selection remains Python-owned and limited to implementations provided by
+`mmrl`; environment packages may select and configure them, but cannot inject
+new algorithm, model, memory, or runner classes into the library.
 
 Prefer shared config access helpers over direct `cfg.__dict__` reads when
 implementing reusable runners, models, wrappers, and memory factories.
-Prefer `class_name` based construction hooks for algorithm/model/memory
-components so environment packages can swap implementations without editing
-`mmrl` internals.
+Use `class_name` only to select implementations explicitly supported by the
+corresponding `mmrl` runner.
 
 ## Memory Roadmap
 

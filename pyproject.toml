@@ -12,12 +12,6 @@ dependencies = [
   "tensordict>=0.6.0",
 ]
 
-[project.scripts]
-tdmpc2-train = "mmrl.scripts.tdmpc2.train:main"
-tdmpc2-play = "mmrl.scripts.tdmpc2.play:main"
-fastsac-train = "mmrl.scripts.fastsac.train:main"
-fastsac-play = "mmrl.scripts.fastsac.play:main"
-
 [tool.setuptools.packages.find]
 where = ["src"]
 
