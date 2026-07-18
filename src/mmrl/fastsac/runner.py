@@ -9,17 +9,18 @@ import torch
 from mmrl.fastsac.buffer import FastSACReplayBuffer
 from mmrl.fastsac.config import FastSACConfig
 from mmrl.fastsac.fastsac import FastSAC
-from mmrl.fastsac.vecenv_wrapper import FastSACVecEnvWrapper
+from mmrl.env_wrappers.mjlab import MJLabVectorEnvWrapper
 from mmrl.logging import format_training_log
+from mmrl.runners.off_policy import OffPolicyRunner
 
 
-class FastSACRunner:
+class FastSACRunner(OffPolicyRunner):
     """Online off-policy training loop for FastSAC."""
 
     def __init__(
         self,
         cfg: FastSACConfig,
-        env: FastSACVecEnvWrapper,
+        env: MJLabVectorEnvWrapper,
         agent: FastSAC,
         buffer: FastSACReplayBuffer,
         log_dir: str | Path,

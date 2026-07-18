@@ -3,10 +3,10 @@
 Environment-agnostic reinforcement learning algorithms for MJLab, IsaacLab,
 Gym, and Gymnasium style environments.
 
-`mmrl` is an extension package. Install it into the same Python
-environment as your simulator or environment framework, and it provides
-additional algorithm APIs and command line entry points without modifying
-upstream environment packages.
+`mmrl` is a core algorithm package. Install it into the same Python
+environment as your simulator or environment framework, then write thin
+environment-specific `train.py` and `play.py` entry points that compose its
+wrappers, memories, agents, and runners.
 
 Algorithm defaults can be registered by task extension packages. For example,
 `mjlabplusplus` registers DR02 FastSAC and TD-MPC2 defaults from its
@@ -16,11 +16,9 @@ Algorithm defaults can be registered by task extension packages. For example,
 
 - TD-MPC2
   - Model-based RL implementation migrated from the original `tdmpc2` branch.
-  - Commands: `tdmpc2-train`, `tdmpc2-play`
 - FastSAC
   - Lightweight Soft Actor-Critic implementation for flat continuous-control
-    MJLab tasks.
-  - Commands: `fastsac-train`, `fastsac-play`
+    tasks.
 
 ## Requirements
 
@@ -106,10 +104,24 @@ from mmrl.registry import load_fastsac_cfg, load_tdmpc2_cfg
 from mmrl.tdmpc2 import TDMPC2, TDMPC2Config, make_tdmpc2_config
 ```
 
+Environment and memory imports:
+
+```python
+from mmrl.env_wrappers import GymnasiumEnvWrapper
+from mmrl.env_wrappers import MJLabSingleEnvWrapper, MJLabVectorEnvWrapper
+from mmrl.memories import EpisodeMemory, OffPolicyReplayMemory
+```
+
 ## Package Layout
 
 ```text
 src/mmrl/
+  env_wrappers/
+    base.py
+    gym.py
+    gymnasium.py
+    isaaclab.py
+    mjlab.py
   fastsac/
     buffer.py
     config.py
@@ -117,6 +129,21 @@ src/mmrl/
     networks.py
     runner.py
     vecenv_wrapper.py
+  memories/
+    base.py
+    episode.py
+    off_policy.py
+    on_policy.py
+  models/
+    actors.py
+    base.py
+    critics.py
+    world_models.py
+  runners/
+    base.py
+    model_based.py
+    off_policy.py
+    on_policy.py
   tdmpc2/
     buffer.py
     config.py
@@ -130,6 +157,14 @@ src/mmrl/
     tdmpc2/
 ```
 
+Examples:
+
+```text
+examples/gymnasium/
+  fastsac_train.py
+  fastsac_play.py
+```
+
 ## Notes
 
 - TD-MPC2 uses single-environment training.
@@ -138,6 +173,9 @@ src/mmrl/
 - FastSAC supports vectorized MJLab environments through its wrapper, but is
   intentionally single-process and lightweight.
 - Both algorithms flatten MJLab dict observations for their policy inputs.
+- Legacy imports such as `mmrl.fastsac.vecenv_wrapper` and
+  `mmrl.tdmpc2.buffer` are kept as compatibility shims while the common
+  namespaces mature.
 
 ## Development Checks
 

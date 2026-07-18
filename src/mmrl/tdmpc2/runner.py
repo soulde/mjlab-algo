@@ -4,20 +4,25 @@ Encapsulates the online training loop: environment interaction,
 experience collection, agent updates, evaluation, and logging.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from time import time
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
-from tensordict import TensorDict
 
 from mmrl.logging import format_training_log
+from mmrl.runners.model_based import ModelBasedRunner
 from mmrl.tdmpc2.buffer import Buffer
-from mmrl.tdmpc2.tdmpc2 import TDMPC2
-from mmrl.tdmpc2.vecenv_wrapper import TDMPC2VecEnvWrapper
+from mmrl.env_wrappers.mjlab import MJLabSingleEnvWrapper
+
+if TYPE_CHECKING:
+    from mmrl.tdmpc2.tdmpc2 import TDMPC2
 
 
-class TDMPC2Runner:
+class TDMPC2Runner(ModelBasedRunner):
     """Runner for online single-task TD-MPC2 training.
 
     Manages the training loop: collects experience, updates
@@ -27,7 +32,7 @@ class TDMPC2Runner:
     def __init__(
         self,
         cfg,
-        env: TDMPC2VecEnvWrapper,
+        env: MJLabSingleEnvWrapper,
         agent: TDMPC2,
         buffer: Buffer,
         log_dir: Path,
@@ -137,8 +142,10 @@ class TDMPC2Runner:
         action: torch.Tensor | None = None,
         reward: torch.Tensor | None = None,
         terminated: torch.Tensor | None = None,
-    ) -> TensorDict:
+    ):
         """Create a TensorDict for a single timestep."""
+        from tensordict import TensorDict
+
         if action is None:
             action = torch.full_like(self.env.rand_act(), float("nan"))
         action = action.to(obs.device)

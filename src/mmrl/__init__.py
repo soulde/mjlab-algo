@@ -13,7 +13,7 @@ from mmrl.registry import (
     register_fastsac_cfg,
     register_tdmpc2_cfg,
 )
-from mmrl.tdmpc2 import TDMPC2, TDMPC2Config, TDMPC2Runner, make_tdmpc2_config
+from mmrl.tdmpc2.config import TDMPC2Config, make_tdmpc2_config
 
 __all__ = [
     "FastSAC",
@@ -30,3 +30,15 @@ __all__ = [
     "register_fastsac_cfg",
     "register_tdmpc2_cfg",
 ]
+
+
+def __getattr__(name: str):
+    if name == "TDMPC2":
+        from mmrl.tdmpc2 import TDMPC2
+
+        return TDMPC2
+    if name == "TDMPC2Runner":
+        from mmrl.tdmpc2 import TDMPC2Runner
+
+        return TDMPC2Runner
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
