@@ -3,6 +3,7 @@
 import torch
 
 from mmrl.memories.base import Memory
+from mmrl.memories.storage import EpisodeListStorage
 
 
 class EpisodeMemory(Memory):
@@ -12,13 +13,11 @@ class EpisodeMemory(Memory):
         self.cfg = cfg
         self._capacity = min(cfg.buffer_size, cfg.steps)
         self._batch_size = cfg.batch_size * (cfg.horizon + 1)
-        self._num_eps = 0
-        self._episodes: list = []
-        self._num_steps = 0
+        self.storage = EpisodeListStorage(self._capacity)
 
     @property
     def size(self) -> int:
-        return self._num_steps
+        return self.storage.size
 
     @property
     def capacity(self):
@@ -26,30 +25,15 @@ class EpisodeMemory(Memory):
 
     @property
     def num_eps(self):
-        return self._num_eps
+        return self.storage.num_eps
 
     def add(self, td) -> int:
         """Add an episode to the memory."""
-        while self._num_steps + td.shape[0] > self._capacity and self._num_eps > 0:
-            removed = self._episodes.pop(0)
-            self._num_steps -= removed.shape[0]
-            self._num_eps -= 1
-
-        self._episodes.append(td)
-        self._num_steps += td.shape[0]
-        self._num_eps += 1
-        return self._num_eps
+        return self.storage.add(td)
 
     def _sample_episode(self):
         """Sample a random episode that is long enough."""
-        min_len = self.cfg.horizon + 1
-        lengths = torch.tensor(
-            [max(0, ep.shape[0] - min_len + 1) for ep in self._episodes],
-            dtype=torch.float32,
-        )
-        probs = lengths / lengths.sum()
-        idx = torch.multinomial(probs, 1).item()
-        return self._episodes[idx]
+        return self.storage.sample_episode(self.cfg.horizon + 1)
 
     def sample(
         self,

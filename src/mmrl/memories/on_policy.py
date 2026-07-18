@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import torch
 
 from mmrl.memories.base import Memory
+from mmrl.memories.storage import TensorListStorage
 
 
 @dataclass(frozen=True)
@@ -23,18 +24,17 @@ class OnPolicyRolloutMemory(Memory):
     """Minimal rollout store for future on-policy algorithms."""
 
     def __init__(self):
-        self._items: list[OnPolicyRolloutBatch] = []
+        self.storage = TensorListStorage()
 
     @property
     def size(self) -> int:
-        return len(self._items)
+        return self.storage.size
 
     def add(self, batch: OnPolicyRolloutBatch) -> None:
-        self._items.append(batch)
+        self.storage.add(batch)
 
     def clear(self) -> None:
-        self._items.clear()
+        self.storage.clear()
 
     def sample(self) -> list[OnPolicyRolloutBatch]:
-        return list(self._items)
-
+        return self.storage.as_list()

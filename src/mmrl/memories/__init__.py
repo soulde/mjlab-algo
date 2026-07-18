@@ -9,6 +9,11 @@ from mmrl.memories.on_policy import (
     OnPolicyRolloutBatch as OnPolicyRolloutBatch,
     OnPolicyRolloutMemory as OnPolicyRolloutMemory,
 )
+from mmrl.memories.storage import (
+    EpisodeListStorage as EpisodeListStorage,
+    TensorListStorage as TensorListStorage,
+    TensorRingStorage as TensorRingStorage,
+)
 
 __all__ = [
     "EpisodeMemory",
@@ -17,6 +22,9 @@ __all__ = [
     "OffPolicyReplayMemory",
     "OnPolicyRolloutBatch",
     "OnPolicyRolloutMemory",
+    "EpisodeListStorage",
+    "TensorListStorage",
+    "TensorRingStorage",
 ]
 
 

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import torch
 
 from mmrl.memories.base import Memory
+from mmrl.memories.storage import TensorRingStorage
 
 
 @dataclass(frozen=True)
@@ -28,17 +29,40 @@ class OffPolicyReplayMemory(Memory):
     ):
         self.capacity = int(capacity)
         self.device = torch.device(device)
-        self.obs = torch.empty((self.capacity, obs_dim), dtype=torch.float32)
-        self.action = torch.empty((self.capacity, action_dim), dtype=torch.float32)
-        self.reward = torch.empty((self.capacity, 1), dtype=torch.float32)
-        self.next_obs = torch.empty((self.capacity, obs_dim), dtype=torch.float32)
-        self.done = torch.empty((self.capacity, 1), dtype=torch.float32)
-        self._pos = 0
-        self._size = 0
+        self.storage = TensorRingStorage(
+            self.capacity,
+            {
+                "obs": ((obs_dim,), torch.float32),
+                "action": ((action_dim,), torch.float32),
+                "reward": ((1,), torch.float32),
+                "next_obs": ((obs_dim,), torch.float32),
+                "done": ((1,), torch.float32),
+            },
+        )
+
+    @property
+    def obs(self) -> torch.Tensor:
+        return self.storage["obs"]
+
+    @property
+    def action(self) -> torch.Tensor:
+        return self.storage["action"]
+
+    @property
+    def reward(self) -> torch.Tensor:
+        return self.storage["reward"]
+
+    @property
+    def next_obs(self) -> torch.Tensor:
+        return self.storage["next_obs"]
+
+    @property
+    def done(self) -> torch.Tensor:
+        return self.storage["done"]
 
     @property
     def size(self) -> int:
-        return self._size
+        return self.storage.size
 
     def add(
         self,
@@ -55,28 +79,24 @@ class OffPolicyReplayMemory(Memory):
         next_obs = next_obs.detach().cpu().to(dtype=torch.float32)
         done = done.detach().cpu().to(dtype=torch.float32).view(-1, 1)
 
-        batch_size = obs.shape[0]
-        indices = (torch.arange(batch_size) + self._pos) % self.capacity
-        self.obs[indices] = obs
-        self.action[indices] = action
-        self.reward[indices] = reward
-        self.next_obs[indices] = next_obs
-        self.done[indices] = done
-        self._pos = int((self._pos + batch_size) % self.capacity)
-        self._size = min(self._size + batch_size, self.capacity)
+        self.storage.add(
+            {
+                "obs": obs,
+                "action": action,
+                "reward": reward,
+                "next_obs": next_obs,
+                "done": done,
+            }
+        )
 
     def sample(self, batch_size: int) -> OffPolicyBatch:
         """Sample a uniformly random batch."""
-        if self._size < batch_size:
-            raise ValueError(
-                f"Cannot sample {batch_size} transitions from {self._size}."
-            )
-        indices = torch.randint(0, self._size, (batch_size,))
+        indices = self.storage.sample_indices(batch_size)
+        fields = self.storage.gather(indices, device=self.device)
         return OffPolicyBatch(
-            obs=self.obs[indices].to(self.device),
-            action=self.action[indices].to(self.device),
-            reward=self.reward[indices].to(self.device),
-            next_obs=self.next_obs[indices].to(self.device),
-            done=self.done[indices].to(self.device),
+            obs=fields["obs"],
+            action=fields["action"],
+            reward=fields["reward"],
+            next_obs=fields["next_obs"],
+            done=fields["done"],
         )
-
