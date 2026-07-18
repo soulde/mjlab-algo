@@ -2,15 +2,23 @@
 
 from mmrl.models.base import Model as Model
 from mmrl.models.actors import (
+    GaussianActor as GaussianActor,
     SquashedGaussianActor as SquashedGaussianActor,
     init_weights as init_weights,
 )
-from mmrl.models.critics import TwinQNetwork as TwinQNetwork
+from mmrl.models.critics import (
+    QNetwork as QNetwork,
+    TwinQNetwork as TwinQNetwork,
+    ValueNetwork as ValueNetwork,
+)
 
 __all__ = [
-    "SquashedGaussianActor",
+    "GaussianActor",
     "Model",
+    "QNetwork",
+    "SquashedGaussianActor",
     "TwinQNetwork",
+    "ValueNetwork",
     "WorldModel",
     "init_weights",
 ]

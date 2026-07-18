@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 
 from mmrl.config import get_config_value
-from mmrl.fastsac.networks import (
+from mmrl.models import (
     SquashedGaussianActor,
     TwinQNetwork,
     init_weights,

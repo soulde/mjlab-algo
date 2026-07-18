@@ -28,7 +28,7 @@ def test_ppo_updates_policy_from_rollout():
             value=value,
         )
     memory.compute_returns(torch.zeros(2), gamma=0.99, gae_lambda=0.95)
-    before = policy.actor[0].weight.detach().clone()
+    before = policy.actor.net[0].weight.detach().clone()
 
     metrics = algorithm.update(memory)
 
@@ -40,4 +40,4 @@ def test_ppo_updates_policy_from_rollout():
         "learning_rate",
     }
     assert all(torch.isfinite(torch.tensor(value)) for value in metrics.values())
-    assert not torch.equal(before, policy.actor[0].weight)
+    assert not torch.equal(before, policy.actor.net[0].weight)

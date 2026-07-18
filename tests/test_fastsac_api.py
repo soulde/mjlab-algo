@@ -3,7 +3,7 @@ import torch
 from mmrl import FastSACRunner, FastSACRunnerCfg
 from mmrl.env_wrappers import EnvWrapper
 from mmrl.fastsac import FastSAC, FastSACActorCfg, OffPolicyMemoryCfg
-from mmrl.fastsac.networks import SquashedGaussianActor, TwinQNetwork
+from mmrl.models import SquashedGaussianActor, TwinQNetwork
 from mmrl.memories import OffPolicyReplayMemory
 
 

@@ -5,38 +5,8 @@ license, adapted to mmrl's explicit config and model interfaces.
 """
 
 import torch
-import torch.nn as nn
 
-from mmrl.models import Model
-
-
-def _activation(name: str) -> type[nn.Module]:
-    activations = {
-        "elu": nn.ELU,
-        "relu": nn.ReLU,
-        "selu": nn.SELU,
-        "tanh": nn.Tanh,
-    }
-    try:
-        return activations[name.lower()]
-    except KeyError as error:
-        raise ValueError(f"Unsupported activation {name!r}.") from error
-
-
-def _mlp(
-    input_dim: int,
-    hidden_dims: tuple[int, ...],
-    output_dim: int,
-    activation: str,
-) -> nn.Sequential:
-    layers: list[nn.Module] = []
-    current_dim = input_dim
-    activation_type = _activation(activation)
-    for hidden_dim in hidden_dims:
-        layers.extend((nn.Linear(current_dim, hidden_dim), activation_type()))
-        current_dim = hidden_dim
-    layers.append(nn.Linear(current_dim, output_dim))
-    return nn.Sequential(*layers)
+from mmrl.models import GaussianActor, Model, ValueNetwork
 
 
 class ActorCritic(Model):
@@ -49,35 +19,24 @@ class ActorCritic(Model):
         action_dim: int,
     ):
         super().__init__()
-        self.actor = _mlp(
+        self.actor = GaussianActor(
             obs_dim,
-            tuple(cfg.actor_hidden_dims),
             action_dim,
+            tuple(cfg.actor_hidden_dims),
             cfg.activation,
+            cfg.init_noise_std,
+            cfg.noise_std_type,
         )
-        self.critic = _mlp(
-            obs_dim,
-            tuple(cfg.critic_hidden_dims),
-            1,
-            cfg.activation,
+        self.critic = ValueNetwork(
+            obs_dim, tuple(cfg.critic_hidden_dims), cfg.activation
         )
-        if cfg.noise_std_type == "scalar":
-            self.log_std = nn.Parameter(
-                torch.tensor(float(cfg.init_noise_std)).log()
-            )
-        elif cfg.noise_std_type == "per_action":
-            self.log_std = nn.Parameter(
-                torch.full((action_dim,), float(cfg.init_noise_std)).log()
-            )
-        else:
-            raise ValueError(
-                f"Unsupported noise_std_type {cfg.noise_std_type!r}."
-            )
+
+    @property
+    def log_std(self) -> torch.nn.Parameter:
+        return self.actor.log_std
 
     def distribution(self, obs: torch.Tensor) -> torch.distributions.Normal:
-        mean = self.actor(obs)
-        std = self.log_std.exp().expand_as(mean)
-        return torch.distributions.Normal(mean, std)
+        return self.actor.distribution(obs)
 
     def act(
         self, obs: torch.Tensor
