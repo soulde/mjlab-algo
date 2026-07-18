@@ -46,7 +46,12 @@ class _EpisodeCfg:
 
 
 def test_episode_memory_evicts_by_timestep_capacity():
-    memory = EpisodeMemory(_EpisodeCfg())
+    memory = EpisodeMemory(
+        capacity=_EpisodeCfg.buffer_size,
+        batch_size=_EpisodeCfg.batch_size,
+        horizon=_EpisodeCfg.horizon,
+        device="cpu",
+    )
     episode_a = TensorDict({"obs": torch.zeros(3, 1)}, batch_size=(3,))
     episode_b = TensorDict({"obs": torch.ones(3, 1)}, batch_size=(3,))
 

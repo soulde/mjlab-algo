@@ -67,8 +67,8 @@ def test_runner_builds_fixed_agent_and_memory(monkeypatch, tmp_path):
             self.device = device
 
     class FakeMemory:
-        def __init__(self, cfg):
-            self.cfg = cfg
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
 
     monkeypatch.setattr("mmrl.tdmpc2.runner.TDMPC2", FakeAgent)
     monkeypatch.setattr("mmrl.tdmpc2.runner.EpisodeMemory", FakeMemory)
@@ -80,7 +80,7 @@ def test_runner_builds_fixed_agent_and_memory(monkeypatch, tmp_path):
     assert runner.cfg.action_dim == 2
     assert runner.cfg.episode_length == 50
     assert runner.agent.cfg is runner.cfg
-    assert runner.buffer.cfg is runner.cfg
+    assert runner.buffer.kwargs["capacity"] == cfg.memory.capacity
 
 
 def test_runner_rejects_external_algorithm(monkeypatch, tmp_path):
@@ -125,4 +125,4 @@ def test_runner_accepts_nested_class_style_config(monkeypatch, tmp_path):
 
     assert runner.cfg.enc_dim == 256
     assert runner.cfg.buffer_size == 100
-    assert runner.cfg.batch_size == 2
+    assert runner.buffer._batch_size == 2

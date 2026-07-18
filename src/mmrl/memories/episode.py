@@ -9,10 +9,17 @@ from mmrl.memories.storage import EpisodeListStorage
 class EpisodeMemory(Memory):
     """Store full episodes and sample contiguous subsequences."""
 
-    def __init__(self, cfg):
-        self.cfg = cfg
-        self._capacity = min(cfg.buffer_size, cfg.steps)
-        self._batch_size = cfg.batch_size * (cfg.horizon + 1)
+    def __init__(
+        self,
+        capacity: int,
+        batch_size: int,
+        horizon: int,
+        device: str | torch.device,
+    ):
+        self._capacity = int(capacity)
+        self._batch_size = int(batch_size)
+        self._horizon = int(horizon)
+        self.device = torch.device(device)
         self.storage = EpisodeListStorage(self._capacity)
 
     @property
@@ -33,7 +40,7 @@ class EpisodeMemory(Memory):
 
     def _sample_episode(self):
         """Sample a random episode that is long enough."""
-        return self.storage.sample_episode(self.cfg.horizon + 1)
+        return self.storage.sample_episode(self._horizon + 1)
 
     def sample(
         self,
@@ -45,11 +52,11 @@ class EpisodeMemory(Memory):
         torch.Tensor | None,
     ]:
         """Sample a batch of subsequences."""
-        horizon = self.cfg.horizon
+        horizon = self._horizon
         obs_list, action_list, reward_list = [], [], []
         terminated_list, task_list = [], []
 
-        for _ in range(self.cfg.batch_size):
+        for _ in range(self._batch_size):
             ep = self._sample_episode()
             ep_len = ep.shape[0]
             max_start = ep_len - horizon - 1
@@ -72,14 +79,21 @@ class EpisodeMemory(Memory):
         if task_list:
             task = torch.stack(task_list, dim=1)
 
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        obs = obs.to(device, non_blocking=True).contiguous()
-        action = action[1:].to(device, non_blocking=True).contiguous()
-        reward = reward[1:].unsqueeze(-1).to(device, non_blocking=True).contiguous()
+        obs = obs.to(self.device, non_blocking=True).contiguous()
+        action = action[1:].to(self.device, non_blocking=True).contiguous()
+        reward = (
+            reward[1:]
+            .unsqueeze(-1)
+            .to(self.device, non_blocking=True)
+            .contiguous()
+        )
         terminated = (
-            terminated[1:].unsqueeze(-1).to(device, non_blocking=True).contiguous()
+            terminated[1:]
+            .unsqueeze(-1)
+            .to(self.device, non_blocking=True)
+            .contiguous()
         )
         if task is not None:
-            task = task[0].to(device, non_blocking=True).contiguous()
+            task = task[0].to(self.device, non_blocking=True).contiguous()
 
         return obs, action, reward, terminated, task

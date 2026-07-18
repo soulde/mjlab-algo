@@ -63,7 +63,12 @@ class TDMPC2Runner(ModelBasedRunner):
             )
         self.cfg = self._make_runtime_cfg(episode_length)
         self.agent = TDMPC2(self.cfg, device=self.device)
-        self.buffer = EpisodeMemory(self.cfg)
+        self.buffer = EpisodeMemory(
+            capacity=get_config_value(train_cfg, "memory.capacity"),
+            batch_size=get_config_value(train_cfg, "memory.batch_size"),
+            horizon=get_config_value(train_cfg, "algorithm.horizon"),
+            device=self.device,
+        )
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
