@@ -1,5 +1,12 @@
 """Environment-agnostic reinforcement learning algorithms."""
 
+from mmrl.config import (
+    config_to_dict,
+    get_config_value,
+    require_config_value,
+    resolve_class,
+    resolve_config_class,
+)
 from mmrl.fastsac import (
     FastSAC,
     FastSACConfig,
@@ -23,12 +30,17 @@ __all__ = [
     "TDMPC2",
     "TDMPC2Config",
     "TDMPC2Runner",
+    "config_to_dict",
+    "get_config_value",
     "load_fastsac_cfg",
     "load_tdmpc2_cfg",
     "make_fastsac_config",
     "make_tdmpc2_config",
+    "require_config_value",
     "register_fastsac_cfg",
     "register_tdmpc2_cfg",
+    "resolve_class",
+    "resolve_config_class",
 ]
 
 
