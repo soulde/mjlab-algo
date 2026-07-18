@@ -141,3 +141,17 @@ def test_runner_accepts_nested_class_style_config(monkeypatch, tmp_path):
     assert runner.model.cfg.enc_dim == 256
     assert runner.env_spec.action_dim == 2
     assert runner.buffer._batch_size == 2
+
+
+def test_inference_policy_removes_single_environment_batch_dimension():
+    class FakeAgent:
+        def act(self, obs, **kwargs):
+            assert obs.shape == (3,)
+            return torch.zeros(2)
+
+    runner = object.__new__(TDMPC2Runner)
+    runner.agent = FakeAgent()
+
+    action = runner.get_inference_policy()(torch.zeros(1, 3), t0=True)
+
+    assert action.shape == (2,)

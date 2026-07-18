@@ -2,8 +2,6 @@
 
 import argparse
 
-import gymnasium as gym
-
 from mmrl.env_wrappers.gymnasium import GymnasiumEnvWrapper
 from mmrl.fastsac import FastSAC, FastSACRunnerCfg
 
@@ -19,8 +17,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    env = gym.make(args.env_id, render_mode="human")
-    wrapped_env = GymnasiumEnvWrapper(env, device=args.device)
+    wrapped_env = GymnasiumEnvWrapper.make(
+        args.env_id, device=args.device, render_mode="human"
+    )
     cfg = FastSACRunnerCfg(device=str(wrapped_env.device))
     agent = FastSAC(
         cfg,

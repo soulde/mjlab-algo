@@ -49,6 +49,13 @@ uv pip install --python .venv/bin/python \
   git+https://github.com/soulde/mmrl.git
 ```
 
+Install the optional Gymnasium dm-control stack for dog-run:
+
+```sh
+uv pip install --python .venv/bin/python -e './mmrl[dm-control]' \
+  --no-build-isolation
+```
+
 ## Entry Points
 
 `mmrl` intentionally provides no training CLI. MJLab, IsaacLab, Gym, and
@@ -135,7 +142,26 @@ examples/gymnasium/
   fastsac_play.py
   ppo_train.py
   ppo_play.py
+  tdmpc2_train.py
+  tdmpc2_play.py
 ```
+
+### Gymnasium Dog Run
+
+The examples support the Shimmy environment ID `dm_control/dog-run-v0`:
+
+```sh
+MUJOCO_GL=egl python examples/gymnasium/ppo_train.py \
+  dm_control/dog-run-v0
+MUJOCO_GL=egl python examples/gymnasium/fastsac_train.py \
+  dm_control/dog-run-v0
+MUJOCO_GL=egl python examples/gymnasium/tdmpc2_train.py \
+  dm_control/dog-run-v0
+```
+
+Each corresponding `*_play.py` accepts its checkpoint path. Use
+`render_mode="human"` on a machine with a display; use an EGL-backed render
+mode for headless playback or recording.
 
 ## Notes
 

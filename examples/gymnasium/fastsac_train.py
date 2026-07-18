@@ -10,7 +10,6 @@ import random
 from datetime import datetime
 from pathlib import Path
 
-import gymnasium as gym
 import numpy as np
 import torch
 
@@ -38,8 +37,7 @@ def main() -> None:
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    env = gym.make(args.env_id)
-    wrapped_env = GymnasiumEnvWrapper(env, device=args.device)
+    wrapped_env = GymnasiumEnvWrapper.make(args.env_id, device=args.device)
     cfg = FastSACRunnerCfg(
         seed=args.seed,
         total_steps=args.total_steps,

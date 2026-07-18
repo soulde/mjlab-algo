@@ -104,6 +104,8 @@ class TDMPC2Runner(ModelBasedRunner):
             self.agent.model.to(self.agent.device)
 
         def policy(obs: torch.Tensor, t0: bool = False) -> torch.Tensor:
+            if obs.ndim > 1 and obs.shape[0] == 1:
+                obs = obs.squeeze(0)
             return self.agent.act(obs, t0=t0, eval_mode=True)
 
         return policy
