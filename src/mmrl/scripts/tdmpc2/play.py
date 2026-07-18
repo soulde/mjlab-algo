@@ -13,9 +13,9 @@ import torch
 import tyro
 
 from mjlab.envs import ManagerBasedRlEnv
-from mjlab_algo.tdmpc2 import TDMPC2, make_tdmpc2_config
-from mjlab_algo.tdmpc2.vecenv_wrapper import TDMPC2VecEnvWrapper
-from mjlab_algo.scripts._cli import maybe_print_top_level_help
+from mmrl.tdmpc2 import TDMPC2, make_tdmpc2_config
+from mmrl.tdmpc2.vecenv_wrapper import TDMPC2VecEnvWrapper
+from mmrl.scripts._cli import maybe_print_top_level_help
 from mjlab.tasks.registry import list_tasks, load_env_cfg
 from mjlab.utils.torch import configure_torch_backends
 from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer

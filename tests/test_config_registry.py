@@ -1,11 +1,11 @@
-from mjlab_algo.fastsac import FastSACConfig
-from mjlab_algo.registry import (
+from mmrl.fastsac import FastSACConfig
+from mmrl.registry import (
     load_fastsac_cfg,
     load_tdmpc2_cfg,
     register_fastsac_cfg,
     register_tdmpc2_cfg,
 )
-from mjlab_algo.tdmpc2 import TDMPC2Config
+from mmrl.tdmpc2 import TDMPC2Config
 
 
 def test_algorithm_cfg_registry_returns_copies():

@@ -14,7 +14,7 @@ import torch
 import tyro
 
 from mjlab.envs import ManagerBasedRlEnv
-from mjlab_algo.tdmpc2 import (
+from mmrl.tdmpc2 import (
     TDMPC2,
     Buffer,
     MODEL_SIZE,
@@ -22,9 +22,9 @@ from mjlab_algo.tdmpc2 import (
     TDMPC2Runner,
     make_tdmpc2_config,
 )
-from mjlab_algo.tdmpc2.vecenv_wrapper import TDMPC2VecEnvWrapper
-from mjlab_algo.registry import load_tdmpc2_cfg
-from mjlab_algo.scripts._cli import maybe_print_top_level_help
+from mmrl.tdmpc2.vecenv_wrapper import TDMPC2VecEnvWrapper
+from mmrl.registry import load_tdmpc2_cfg
+from mmrl.scripts._cli import maybe_print_top_level_help
 from mjlab.tasks.registry import list_tasks, load_env_cfg
 from mjlab.utils.torch import configure_torch_backends
 

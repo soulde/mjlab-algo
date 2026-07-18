@@ -5,9 +5,9 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 
-from mjlab_algo.fastsac.buffer import FastSACBatch
-from mjlab_algo.fastsac.config import FastSACConfig
-from mjlab_algo.fastsac.networks import (
+from mmrl.fastsac.buffer import FastSACBatch
+from mmrl.fastsac.config import FastSACConfig
+from mmrl.fastsac.networks import (
     SquashedGaussianActor,
     TwinQNetwork,
     init_weights,

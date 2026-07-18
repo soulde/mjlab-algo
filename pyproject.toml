@@ -3,18 +3,18 @@ requires = ["setuptools>=80", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mjlab-algo"
+name = "mmrl"
 version = "0.1.0"
-description = "Private MJLab extension package for additional RL algorithms."
+description = "Environment-agnostic reinforcement learning algorithm package."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = []
 
 [project.scripts]
-tdmpc2-train = "mjlab_algo.scripts.tdmpc2.train:main"
-tdmpc2-play = "mjlab_algo.scripts.tdmpc2.play:main"
-fastsac-train = "mjlab_algo.scripts.fastsac.train:main"
-fastsac-play = "mjlab_algo.scripts.fastsac.play:main"
+tdmpc2-train = "mmrl.scripts.tdmpc2.train:main"
+tdmpc2-play = "mmrl.scripts.tdmpc2.play:main"
+fastsac-train = "mmrl.scripts.fastsac.train:main"
+fastsac-play = "mmrl.scripts.fastsac.play:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

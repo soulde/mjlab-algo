@@ -1,4 +1,4 @@
-from mjlab_algo.logging import format_training_log
+from mmrl.logging import format_training_log
 
 
 def test_format_training_log_includes_ppo_style_debug_fields():

@@ -6,11 +6,11 @@ from time import time
 
 import torch
 
-from mjlab_algo.fastsac.buffer import FastSACReplayBuffer
-from mjlab_algo.fastsac.config import FastSACConfig
-from mjlab_algo.fastsac.fastsac import FastSAC
-from mjlab_algo.fastsac.vecenv_wrapper import FastSACVecEnvWrapper
-from mjlab_algo.logging import format_training_log
+from mmrl.fastsac.buffer import FastSACReplayBuffer
+from mmrl.fastsac.config import FastSACConfig
+from mmrl.fastsac.fastsac import FastSAC
+from mmrl.fastsac.vecenv_wrapper import FastSACVecEnvWrapper
+from mmrl.logging import format_training_log
 
 
 class FastSACRunner:

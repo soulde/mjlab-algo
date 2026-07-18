@@ -1,11 +1,12 @@
-# mjlab-algo
+# mmrl
 
-Additional reinforcement learning algorithms for
-[MJLab](https://github.com/mujocolab/mjlab).
+Environment-agnostic reinforcement learning algorithms for MJLab, IsaacLab,
+Gym, and Gymnasium style environments.
 
-`mjlab-algo` is an extension package. Install it into the same Python
-environment as `mjlab`, and it provides additional algorithm APIs and command
-line entry points without modifying the upstream `mjlab` repository.
+`mmrl` is an extension package. Install it into the same Python
+environment as your simulator or environment framework, and it provides
+additional algorithm APIs and command line entry points without modifying
+upstream environment packages.
 
 Algorithm defaults can be registered by task extension packages. For example,
 `mjlabplusplus` registers DR02 FastSAC and TD-MPC2 defaults from its
@@ -23,26 +24,28 @@ Algorithm defaults can be registered by task extension packages. For example,
 
 ## Requirements
 
-- Python version compatible with your `mjlab` checkout.
-- A working `mjlab` environment.
+- Python version compatible with your target environment framework.
+- A working MJLab, IsaacLab, Gym, or Gymnasium environment.
 - `uv` for local editable installation and command execution.
 
-This package intentionally does not vendor `mjlab`; install `mjlab` separately
-and then install this algorithm package into the same environment.
+This package intentionally does not vendor environment frameworks; install the
+target environment package separately and then install this algorithm package
+into the same environment.
 
 ## Install
 
-From a workspace that contains both `mjlab` and this repository:
+From a workspace that contains both your environment package and this
+repository:
 
 ```sh
-uv pip install --python .venv/bin/python -e ./mjlab-algo --no-build-isolation
+uv pip install --python .venv/bin/python -e ./mmrl --no-build-isolation
 ```
 
 From GitHub:
 
 ```sh
 uv pip install --python .venv/bin/python \
-  git+https://github.com/soulde/mjlab-algo.git
+  git+https://github.com/soulde/mmrl.git
 ```
 
 ## Command Line Usage
@@ -90,23 +93,23 @@ uv run fastsac-train Mjlab-Cartpole-Balance \
 Top-level imports:
 
 ```python
-from mjlab_algo import FastSAC, FastSACConfig, FastSACRunner
-from mjlab_algo import TDMPC2, TDMPC2Config, TDMPC2Runner
+from mmrl import FastSAC, FastSACConfig, FastSACRunner
+from mmrl import TDMPC2, TDMPC2Config, TDMPC2Runner
 ```
 
 Algorithm-specific imports:
 
 ```python
-from mjlab_algo.fastsac import FastSAC, FastSACReplayBuffer
-from mjlab_algo.fastsac import FastSACConfig, make_fastsac_config
-from mjlab_algo.registry import load_fastsac_cfg, load_tdmpc2_cfg
-from mjlab_algo.tdmpc2 import TDMPC2, TDMPC2Config, make_tdmpc2_config
+from mmrl.fastsac import FastSAC, FastSACReplayBuffer
+from mmrl.fastsac import FastSACConfig, make_fastsac_config
+from mmrl.registry import load_fastsac_cfg, load_tdmpc2_cfg
+from mmrl.tdmpc2 import TDMPC2, TDMPC2Config, make_tdmpc2_config
 ```
 
 ## Package Layout
 
 ```text
-src/mjlab_algo/
+src/mmrl/
   fastsac/
     buffer.py
     config.py
@@ -141,12 +144,12 @@ src/mjlab_algo/
 Run these from the parent `mjlab` workspace:
 
 ```sh
-uv run ruff check mjlab-algo/src mjlab-algo/tests
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run pytest mjlab-algo/tests
+uv run ruff check mmrl/src mmrl/tests
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run pytest mmrl/tests
 ```
 
 To refresh console scripts after changing `pyproject.toml` or `setup.py`:
 
 ```sh
-uv pip install --python .venv/bin/python -e ./mjlab-algo --no-build-isolation
+uv pip install --python .venv/bin/python -e ./mmrl --no-build-isolation
 ```

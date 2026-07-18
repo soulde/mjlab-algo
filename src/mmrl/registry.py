@@ -2,8 +2,8 @@
 
 from copy import deepcopy
 
-from mjlab_algo.fastsac import FastSACConfig, make_fastsac_config
-from mjlab_algo.tdmpc2 import TDMPC2Config, make_tdmpc2_config
+from mmrl.fastsac import FastSACConfig, make_fastsac_config
+from mmrl.tdmpc2 import TDMPC2Config, make_tdmpc2_config
 
 _FASTSAC_CFGS: dict[str, FastSACConfig] = {}
 _TDMPC2_CFGS: dict[str, TDMPC2Config] = {}

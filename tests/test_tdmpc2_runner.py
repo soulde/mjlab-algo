@@ -1,6 +1,6 @@
 import torch
 
-from mjlab_algo.tdmpc2.runner import TDMPC2Runner
+from mmrl.tdmpc2.runner import TDMPC2Runner
 
 
 class _FakeEnv:

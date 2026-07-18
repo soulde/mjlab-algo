@@ -11,9 +11,9 @@ from mjlab.envs import ManagerBasedRlEnv
 from mjlab.tasks.registry import list_tasks, load_env_cfg
 from mjlab.utils.torch import configure_torch_backends
 from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer
-from mjlab_algo.fastsac import FastSAC, make_fastsac_config
-from mjlab_algo.fastsac.vecenv_wrapper import FastSACVecEnvWrapper
-from mjlab_algo.scripts._cli import maybe_print_top_level_help
+from mmrl.fastsac import FastSAC, make_fastsac_config
+from mmrl.fastsac.vecenv_wrapper import FastSACVecEnvWrapper
+from mmrl.scripts._cli import maybe_print_top_level_help
 
 
 @dataclass(frozen=True)

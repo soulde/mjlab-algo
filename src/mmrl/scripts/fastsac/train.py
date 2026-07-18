@@ -12,15 +12,15 @@ import tyro
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.tasks.registry import list_tasks, load_env_cfg
 from mjlab.utils.torch import configure_torch_backends
-from mjlab_algo.fastsac import (
+from mmrl.fastsac import (
     FastSAC,
     FastSACConfig,
     FastSACReplayBuffer,
     FastSACRunner,
 )
-from mjlab_algo.fastsac.vecenv_wrapper import FastSACVecEnvWrapper
-from mjlab_algo.registry import load_fastsac_cfg
-from mjlab_algo.scripts._cli import maybe_print_top_level_help
+from mmrl.fastsac.vecenv_wrapper import FastSACVecEnvWrapper
+from mmrl.registry import load_fastsac_cfg
+from mmrl.scripts._cli import maybe_print_top_level_help
 
 
 def launch_training(task_id: str, cfg: FastSACConfig) -> None:

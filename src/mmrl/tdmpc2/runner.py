@@ -11,10 +11,10 @@ import numpy as np
 import torch
 from tensordict import TensorDict
 
-from mjlab_algo.logging import format_training_log
-from mjlab_algo.tdmpc2.buffer import Buffer
-from mjlab_algo.tdmpc2.tdmpc2 import TDMPC2
-from mjlab_algo.tdmpc2.vecenv_wrapper import TDMPC2VecEnvWrapper
+from mmrl.logging import format_training_log
+from mmrl.tdmpc2.buffer import Buffer
+from mmrl.tdmpc2.tdmpc2 import TDMPC2
+from mmrl.tdmpc2.vecenv_wrapper import TDMPC2VecEnvWrapper
 
 
 class TDMPC2Runner:

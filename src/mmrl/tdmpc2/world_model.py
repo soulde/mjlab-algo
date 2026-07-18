@@ -11,7 +11,7 @@ import torch.nn as nn
 from tensordict import TensorDict
 from tensordict.nn import TensorDictParams
 
-from mjlab_algo.tdmpc2 import init, layers, math
+from mmrl.tdmpc2 import init, layers, math
 
 
 class WorldModel(nn.Module):

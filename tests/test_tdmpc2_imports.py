@@ -1,5 +1,5 @@
-from mjlab_algo.tdmpc2 import Buffer, TDMPC2, TDMPC2Config, make_tdmpc2_config
-from mjlab_algo.tdmpc2.vecenv_wrapper import TDMPC2VecEnvWrapper
+from mmrl.tdmpc2 import Buffer, TDMPC2, TDMPC2Config, make_tdmpc2_config
+from mmrl.tdmpc2.vecenv_wrapper import TDMPC2VecEnvWrapper
 
 
 def test_tdmpc2_public_api_imports():

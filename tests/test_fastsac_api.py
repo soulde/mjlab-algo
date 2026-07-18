@@ -1,8 +1,8 @@
 import torch
 
-from mjlab_algo import FastSACConfig, FastSACRunner, make_fastsac_config
-from mjlab_algo.fastsac import FastSAC, FastSACReplayBuffer
-from mjlab_algo.fastsac.networks import SquashedGaussianActor, TwinQNetwork
+from mmrl import FastSACConfig, FastSACRunner, make_fastsac_config
+from mmrl.fastsac import FastSAC, FastSACReplayBuffer
+from mmrl.fastsac.networks import SquashedGaussianActor, TwinQNetwork
 
 
 def test_fastsac_public_api_imports():

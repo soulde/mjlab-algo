@@ -11,10 +11,10 @@ import torch
 import torch.nn.functional as F
 from tensordict import TensorDict
 
-from mjlab_algo.tdmpc2 import math
-from mjlab_algo.tdmpc2.layers import api_model_conversion
-from mjlab_algo.tdmpc2.scale import RunningScale
-from mjlab_algo.tdmpc2.world_model import WorldModel
+from mmrl.tdmpc2 import math
+from mmrl.tdmpc2.layers import api_model_conversion
+from mmrl.tdmpc2.scale import RunningScale
+from mmrl.tdmpc2.world_model import WorldModel
 
 
 class TDMPC2(torch.nn.Module):
