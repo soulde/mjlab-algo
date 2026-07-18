@@ -8,7 +8,9 @@ version = "0.1.0"
 description = "Environment-agnostic reinforcement learning algorithm package."
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+  "tensordict>=0.6.0",
+]
 
 [project.scripts]
 tdmpc2-train = "mmrl.scripts.tdmpc2.train:main"
