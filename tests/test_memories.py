@@ -57,16 +57,31 @@ def test_episode_memory_evicts_by_timestep_capacity():
 
 
 def test_on_policy_rollout_memory_uses_shared_storage():
-    memory = OnPolicyRolloutMemory()
-    batch = OnPolicyRolloutBatch(
-        obs=torch.zeros(1, 2),
-        action=torch.zeros(1, 1),
-        reward=torch.ones(1),
-        done=torch.zeros(1, dtype=torch.bool),
+    memory = OnPolicyRolloutMemory(
+        num_steps=2,
+        num_envs=2,
+        obs_shape=(3,),
+        action_shape=(1,),
+        device="cpu",
     )
+    for step in range(2):
+        memory.add(
+            obs=torch.full((2, 3), float(step)),
+            action=torch.zeros(2, 1),
+            reward=torch.ones(2),
+            done=torch.zeros(2, dtype=torch.bool),
+            log_prob=torch.zeros(2),
+            value=torch.zeros(2),
+        )
 
-    memory.add(batch)
-    assert memory.size == 1
-    assert memory.sample() == [batch]
+    memory.compute_returns(torch.zeros(2), normalize_advantage=False)
+    batches = list(memory.mini_batches(2))
+
+    assert memory.full
+    assert memory.size == 4
+    assert len(batches) == 2
+    assert all(isinstance(batch, OnPolicyRolloutBatch) for batch in batches)
+    assert all(batch.obs.shape == (2, 3) for batch in batches)
+    assert torch.all(memory.storage["ret"] > 0)
     memory.clear()
     assert memory.size == 0

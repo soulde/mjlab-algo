@@ -183,13 +183,11 @@ Current memory storage is split by sampling pattern:
   tensors and uses ring writes for stable high-frequency transition storage.
 - `EpisodeListStorage` backs TD-MPC2 style episode replay. It keeps variable
   length episodes intact and evicts by total timestep capacity.
-- `TensorListStorage` backs the initial on-policy rollout memory. It is a
-  short-lived append/clear store for future PPO/A2C style runners.
+- `TensorRolloutStorage` backs on-policy rollouts with preallocated
+  `(num_steps, num_envs, ...)` tensors, GAE returns, and shuffled mini-batches.
 
 Planned upgrades:
 
-- Add a preallocated rollout tensor storage shaped like
-  `(rollout_steps, num_envs, ...)` for mature on-policy algorithms.
 - Add optional pinned-memory and device-resident storage modes for faster CPU to
   GPU transfer.
 - Add prioritized off-policy replay without changing the `OffPolicyReplayMemory`

@@ -108,22 +108,50 @@ class EpisodeListStorage:
         return self.episodes[idx]
 
 
-class TensorListStorage:
-    """Append-only tensor-batch storage for rollout fragments."""
+class TensorRolloutStorage:
+    """Device-resident preallocated storage for vectorized rollouts."""
 
-    def __init__(self):
-        self.items: list = []
+    def __init__(
+        self,
+        num_steps: int,
+        num_envs: int,
+        specs: Mapping[str, tuple[tuple[int, ...], torch.dtype]],
+        device: str | torch.device,
+    ):
+        self.num_steps = int(num_steps)
+        self.num_envs = int(num_envs)
+        self.device = torch.device(device)
+        self.fields = {
+            name: torch.empty(
+                (self.num_steps, self.num_envs, *shape),
+                dtype=dtype,
+                device=self.device,
+            )
+            for name, (shape, dtype) in specs.items()
+        }
+        self._pos = 0
 
     @property
     def size(self) -> int:
-        return len(self.items)
+        return self._pos * self.num_envs
 
-    def add(self, item) -> None:
-        self.items.append(item)
+    @property
+    def full(self) -> bool:
+        return self._pos == self.num_steps
+
+    def __getitem__(self, field: str) -> torch.Tensor:
+        return self.fields[field]
+
+    def add(self, values: Mapping[str, torch.Tensor]) -> None:
+        if self.full:
+            raise RuntimeError("Rollout storage is full; clear it before adding.")
+        for name, value in values.items():
+            self.fields[name][self._pos].copy_(value.to(self.device))
+        self._pos += 1
 
     def clear(self) -> None:
-        self.items.clear()
+        self._pos = 0
 
-    def as_list(self) -> list:
-        return list(self.items)
-
+    def flatten(self, field: str) -> torch.Tensor:
+        value = self.fields[field][0 : self._pos]
+        return value.flatten(0, 1)
