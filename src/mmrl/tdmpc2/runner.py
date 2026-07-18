@@ -7,11 +7,12 @@ experience collection, agent updates, evaluation, and logging.
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from time import time
 import numpy as np
 import torch
 
-from mmrl.config import config_to_dict
+from mmrl.config import config_to_dict, get_config_value
 from mmrl.logging import format_training_log
 from mmrl.runners.model_based import ModelBasedRunner
 from mmrl.env_wrappers import EnvWrapper
@@ -36,32 +37,31 @@ class TDMPC2Runner(ModelBasedRunner):
     ):
         if env.num_envs != 1:
             raise ValueError("TDMPC2Runner requires a single environment.")
-        if train_cfg.class_name != "TDMPC2":
-            raise ValueError(f"Unsupported class_name {train_cfg.class_name!r}.")
-        if train_cfg.memory_class_name != "EpisodeMemory":
+        algorithm_name = get_config_value(train_cfg, "algorithm.class_name")
+        model_name = get_config_value(train_cfg, "model.class_name")
+        memory_name = get_config_value(train_cfg, "memory.class_name")
+        if algorithm_name != "TDMPC2":
+            raise ValueError(f"Unsupported algorithm.class_name {algorithm_name!r}.")
+        if model_name != "WorldModel":
+            raise ValueError(f"Unsupported model.class_name {model_name!r}.")
+        if memory_name != "EpisodeMemory":
             raise ValueError(
-                f"Unsupported memory_class_name {train_cfg.memory_class_name!r}."
+                f"Unsupported memory.class_name {memory_name!r}."
             )
-        self.cfg = train_cfg
+        self.train_cfg = train_cfg
         self.env = env
-        self.device = torch.device(device or train_cfg.device or env.device)
-        self.cfg.device = str(self.device)
-        self.cfg.obs_shape = {"state": (env.obs_dim,)}
-        self.cfg.action_dim = env.action_dim
-        if self.cfg.episode_length <= 0:
-            self.cfg.episode_length = int(
-                getattr(env.unwrapped, "max_episode_length", 0)
-            )
-        if self.cfg.episode_length <= 0:
+        self.device = torch.device(
+            device or get_config_value(train_cfg, "device") or env.device
+        )
+        episode_length = get_config_value(train_cfg, "episode_length", 0)
+        if episode_length <= 0:
+            episode_length = int(getattr(env.unwrapped, "max_episode_length", 0))
+        if episode_length <= 0:
             raise ValueError(
-                "TDMPC2Config.episode_length must be set when the environment "
+                "TDMPC2RunnerCfg.episode_length must be set when the environment "
                 "does not expose max_episode_length."
             )
-        if self.cfg.seed_steps <= 0:
-            self.cfg.seed_steps = max(1000, 5 * self.cfg.episode_length)
-        self.cfg.bin_size = (self.cfg.vmax - self.cfg.vmin) / (
-            self.cfg.num_bins - 1
-        )
+        self.cfg = self._make_runtime_cfg(episode_length)
         self.agent = TDMPC2(self.cfg, device=self.device)
         self.buffer = EpisodeMemory(self.cfg)
         self.log_dir = Path(log_dir)
@@ -73,6 +73,29 @@ class TDMPC2Runner(ModelBasedRunner):
         self._wandb = None
 
         self._setup_wandb()
+
+    def _make_runtime_cfg(self, episode_length: int) -> SimpleNamespace:
+        values = config_to_dict(self.train_cfg)
+        algorithm = values.pop("algorithm")
+        model = values.pop("model")
+        memory = values.pop("memory")
+        algorithm.pop("class_name", None)
+        model.pop("class_name", None)
+        memory.pop("class_name", None)
+        values.update(algorithm)
+        values.update(model)
+        values["buffer_size"] = memory["capacity"]
+        values["batch_size"] = memory["batch_size"]
+        values["device"] = str(self.device)
+        values["obs_shape"] = {"state": (self.env.obs_dim,)}
+        values["action_dim"] = self.env.action_dim
+        values["episode_length"] = episode_length
+        if values["seed_steps"] <= 0:
+            values["seed_steps"] = max(1000, 5 * episode_length)
+        values["bin_size"] = (values["vmax"] - values["vmin"]) / (
+            values["num_bins"] - 1
+        )
+        return SimpleNamespace(**values)
 
     def get_inference_policy(self, device: str | torch.device | None = None):
         """Return the TD-MPC2 policy callable used by play scripts."""
@@ -106,7 +129,7 @@ class TDMPC2Runner(ModelBasedRunner):
                 name=str(self.cfg.seed),
                 group=self.cfg.exp_name,
                 dir=str(self.log_dir),
-                config=config_to_dict(self.cfg),
+                config=config_to_dict(self.train_cfg),
                 settings=wandb.Settings(silent=True) if self.cfg.wandb_silent else None,
             )
             self._wandb = wandb

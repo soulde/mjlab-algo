@@ -2,16 +2,20 @@
 
 from mmrl.tdmpc2.config import (
     MODEL_SIZE as MODEL_SIZE,
-    TDMPC2Config as TDMPC2Config,
-    make_tdmpc2_config as make_tdmpc2_config,
+    EpisodeMemoryCfg as EpisodeMemoryCfg,
+    TDMPC2AlgorithmCfg as TDMPC2AlgorithmCfg,
+    TDMPC2ModelCfg as TDMPC2ModelCfg,
+    TDMPC2RunnerCfg as TDMPC2RunnerCfg,
 )
 
 __all__ = [
     "MODEL_SIZE",
+    "EpisodeMemoryCfg",
     "TDMPC2",
-    "TDMPC2Config",
+    "TDMPC2AlgorithmCfg",
+    "TDMPC2ModelCfg",
     "TDMPC2Runner",
-    "make_tdmpc2_config",
+    "TDMPC2RunnerCfg",
 ]
 
 

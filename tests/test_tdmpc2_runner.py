@@ -1,7 +1,12 @@
 import torch
 
 from mmrl.env_wrappers import EnvWrapper
-from mmrl.tdmpc2 import TDMPC2Config
+from mmrl.tdmpc2 import (
+    EpisodeMemoryCfg,
+    TDMPC2AlgorithmCfg,
+    TDMPC2ModelCfg,
+    TDMPC2RunnerCfg,
+)
 from mmrl.tdmpc2.runner import TDMPC2Runner
 
 
@@ -67,23 +72,57 @@ def test_runner_builds_fixed_agent_and_memory(monkeypatch, tmp_path):
 
     monkeypatch.setattr("mmrl.tdmpc2.runner.TDMPC2", FakeAgent)
     monkeypatch.setattr("mmrl.tdmpc2.runner.EpisodeMemory", FakeMemory)
-    cfg = TDMPC2Config(enable_wandb=False, episode_length=0)
+    cfg = TDMPC2RunnerCfg(enable_wandb=False, episode_length=0)
 
     runner = TDMPC2Runner(_RunnerEnv(), cfg, tmp_path)
 
     assert runner.cfg.obs_shape == {"state": (3,)}
     assert runner.cfg.action_dim == 2
     assert runner.cfg.episode_length == 50
-    assert runner.agent.cfg is cfg
-    assert runner.buffer.cfg is cfg
+    assert runner.agent.cfg is runner.cfg
+    assert runner.buffer.cfg is runner.cfg
 
 
 def test_runner_rejects_external_algorithm(monkeypatch, tmp_path):
-    cfg = TDMPC2Config(class_name="environment.TDMPC2", enable_wandb=False)
+    cfg = TDMPC2RunnerCfg(enable_wandb=False)
+    cfg.algorithm.class_name = "environment.TDMPC2"
 
     try:
         TDMPC2Runner(_RunnerEnv(), cfg, tmp_path)
     except ValueError as error:
-        assert "Unsupported class_name" in str(error)
+        assert "Unsupported algorithm.class_name" in str(error)
     else:
         raise AssertionError("Runner accepted an external algorithm implementation")
+
+
+def test_runner_accepts_nested_class_style_config(monkeypatch, tmp_path):
+    class TrainCfg:
+        seed = 1
+        device = "cpu"
+        steps = 10
+        seed_steps = 1
+        episode_length = 50
+        eval_episodes = 0
+        eval_freq = 100
+        log_freq = 0
+        save_agent = False
+        enable_wandb = False
+        wandb_project = "mmrl"
+        wandb_entity = None
+        wandb_silent = True
+        exp_name = "test"
+        algorithm = TDMPC2AlgorithmCfg()
+        model = TDMPC2ModelCfg(model_size=1)
+        memory = EpisodeMemoryCfg(capacity=100, batch_size=2)
+
+    class FakeAgent:
+        def __init__(self, cfg, device):
+            self.cfg = cfg
+            self.device = device
+
+    monkeypatch.setattr("mmrl.tdmpc2.runner.TDMPC2", FakeAgent)
+    runner = TDMPC2Runner(_RunnerEnv(), TrainCfg(), tmp_path)
+
+    assert runner.cfg.enc_dim == 256
+    assert runner.cfg.buffer_size == 100
+    assert runner.cfg.batch_size == 2

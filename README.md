@@ -58,7 +58,7 @@ Top-level imports:
 
 ```python
 from mmrl import FastSAC, FastSACRunner, FastSACRunnerCfg
-from mmrl import TDMPC2, TDMPC2Config, TDMPC2Runner
+from mmrl import TDMPC2, TDMPC2Runner, TDMPC2RunnerCfg
 ```
 
 Algorithm-specific imports:
@@ -66,7 +66,7 @@ Algorithm-specific imports:
 ```python
 from mmrl.fastsac import FastSAC
 from mmrl.memories import OffPolicyReplayMemory
-from mmrl.tdmpc2 import TDMPC2, TDMPC2Config, make_tdmpc2_config
+from mmrl.tdmpc2 import TDMPC2, TDMPC2ModelCfg, TDMPC2RunnerCfg
 ```
 
 Environment and memory imports:
