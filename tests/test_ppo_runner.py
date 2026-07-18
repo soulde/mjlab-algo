@@ -72,3 +72,16 @@ def test_ppo_runner_rejects_external_components(tmp_path):
         assert "Unsupported algorithm.class_name" in str(error)
     else:
         raise AssertionError("Runner accepted an external PPO implementation")
+
+
+def test_ppo_runner_validates_minibatch_divisibility(tmp_path):
+    cfg = _runner_cfg()
+    cfg.memory.num_steps_per_env = 3
+    cfg.algorithm.num_mini_batches = 4
+
+    try:
+        PPORunner(_PPOEnv(), cfg, tmp_path)
+    except ValueError as error:
+        assert "Rollout size 6" in str(error)
+    else:
+        raise AssertionError("Runner accepted an uneven mini-batch split")

@@ -31,6 +31,17 @@ class PPORunner(OnPolicyRunner):
             device or get_config_value(train_cfg, "device") or env.device
         )
         self._validate_components()
+        rollout_size = (
+            get_config_value(train_cfg, "memory.num_steps_per_env") * env.num_envs
+        )
+        num_mini_batches = get_config_value(
+            train_cfg, "algorithm.num_mini_batches"
+        )
+        if rollout_size % num_mini_batches != 0:
+            raise ValueError(
+                f"Rollout size {rollout_size} must be divisible by "
+                f"num_mini_batches {num_mini_batches}."
+            )
         self.policy = ActorCritic(
             get_config_value(train_cfg, "actor_critic"),
             obs_dim=env.obs_dim,

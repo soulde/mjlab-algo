@@ -12,13 +12,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--env-id", default="Pendulum-v1")
     parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--device", default=None)
+    parser.add_argument("--render-mode", default="human")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     wrapped_env = GymnasiumEnvWrapper.make(
-        args.env_id, device=args.device, render_mode="human"
+        args.env_id, device=args.device, render_mode=args.render_mode
     )
     cfg = FastSACRunnerCfg(device=str(wrapped_env.device))
     agent = FastSAC(

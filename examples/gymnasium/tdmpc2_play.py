@@ -13,10 +13,11 @@ def main() -> None:
     parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--episode-length", type=int, default=1_000)
     parser.add_argument("--device", default=None)
+    parser.add_argument("--render-mode", default="human")
     args = parser.parse_args()
 
     env = GymnasiumEnvWrapper.make(
-        args.env_id, device=args.device, render_mode="human"
+        args.env_id, device=args.device, render_mode=args.render_mode
     )
     cfg = TDMPC2RunnerCfg(
         device=str(env.device), episode_length=args.episode_length
