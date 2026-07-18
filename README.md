@@ -177,6 +177,46 @@ examples/gymnasium/
   `mmrl.tdmpc2.buffer` are kept as compatibility shims while the common
   namespaces mature.
 
+## Config Compatibility
+
+`mmrl` should follow the same integration shape as RSL-RL: environment packages
+own their `train.py`/`play.py`, construct the environment, prepare a nested
+runner config, then pass both into an `mmrl` runner.
+
+New runner/model code should accept `train_cfg` objects that are organized like:
+
+```text
+runner:
+  ...
+  algorithm:
+    class_name: ...
+    ...
+  actor:
+    class_name: ...
+    ...
+  critic:
+    class_name: ...
+    ...
+  memory:
+    class_name: ...
+    ...
+```
+
+Environment packages may pass IsaacLab-style config classes or instances into
+`mmrl` runners and models. New code should not assume that config objects are
+dataclasses only. It should support:
+
+- dataclass instances
+- dictionaries
+- plain Python objects with attributes
+- IsaacLab-style class configs with inherited class attributes
+
+Prefer shared config access helpers over direct `cfg.__dict__` reads when
+implementing reusable runners, models, wrappers, and memory factories.
+Prefer `class_name` based construction hooks for algorithm/model/memory
+components so environment packages can swap implementations without editing
+`mmrl` internals.
+
 ## Memory Roadmap
 
 Current memory storage is split by sampling pattern:
