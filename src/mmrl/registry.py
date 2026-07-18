@@ -1,6 +1,7 @@
 """Component and task configuration registries."""
 
 from copy import deepcopy
+from collections.abc import Mapping
 from typing import Any
 
 from mmrl.config import config_to_dict, require_config_value, resolve_class
@@ -11,44 +12,10 @@ _FASTSAC_CFGS: dict[str, FastSACConfig] = {}
 _TDMPC2_CFGS: dict[str, TDMPC2Config] = {}
 
 
-class ComponentRegistry:
-    """Map stable config names to replaceable implementation classes."""
-
-    def __init__(self):
-        self._classes: dict[str, type] = {}
-
-    def register(self, name: str, component: type, *, replace: bool = False) -> None:
-        if not isinstance(component, type):
-            raise TypeError("component must be a class")
-        if name in self._classes and not replace:
-            raise KeyError(f"Component {name!r} is already registered.")
-        self._classes[name] = component
-
-    def resolve(self, name: str | type) -> type:
-        if isinstance(name, type):
-            return name
-        if name in self._classes:
-            return self._classes[name]
-        return resolve_class(name)
-
-    def available(self) -> tuple[str, ...]:
-        return tuple(sorted(self._classes))
-
-
-COMPONENTS = ComponentRegistry()
-
-
-def register_component(
-    name: str, component: type, *, replace: bool = False
-) -> None:
-    """Register a component in the process-wide default registry."""
-    COMPONENTS.register(name, component, replace=replace)
-
-
 def build_component(
     cfg: Any,
     *,
-    registry: ComponentRegistry = COMPONENTS,
+    classes: Mapping[str, type] | None = None,
     config_arg: str | None = None,
     **overrides: Any,
 ) -> Any:
@@ -58,7 +25,13 @@ def build_component(
     argument name. Otherwise public config fields are expanded as keyword
     arguments. Explicit overrides always take precedence.
     """
-    component = registry.resolve(require_config_value(cfg, "class_name"))
+    class_name = require_config_value(cfg, "class_name")
+    if isinstance(class_name, type):
+        component = class_name
+    elif classes is not None and class_name in classes:
+        component = classes[class_name]
+    else:
+        component = resolve_class(class_name)
     if config_arg is not None:
         return component(**{config_arg: cfg, **overrides})
 

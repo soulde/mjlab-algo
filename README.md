@@ -202,7 +202,7 @@ runner:
     ...
 ```
 
-Environment packages may pass IsaacLab-style config classes or instances into
+Environment packages pass Python config classes or instances into
 `mmrl` runners and models. New code should not assume that config objects are
 dataclasses only. It should support:
 
@@ -210,6 +210,10 @@ dataclasses only. It should support:
 - dictionaries
 - plain Python objects with attributes
 - IsaacLab-style class configs with inherited class attributes
+
+YAML configuration is intentionally outside the framework boundary. Component
+selection remains Python-owned: ``class_name`` may be a class object, a fully
+qualified import path, or a short name resolved by a runner-local class map.
 
 Prefer shared config access helpers over direct `cfg.__dict__` reads when
 implementing reusable runners, models, wrappers, and memory factories.

@@ -1,6 +1,5 @@
 from mmrl.fastsac import FastSACConfig
 from mmrl.registry import (
-    ComponentRegistry,
     build_component,
     load_fastsac_cfg,
     load_tdmpc2_cfg,
@@ -55,28 +54,27 @@ class _ConfiguredComponent:
 
 
 def test_component_registry_builds_from_isaaclab_style_config():
-    registry = ComponentRegistry()
-    registry.register("test", _Component)
-
     class ComponentCfg:
         class_name = "test"
         width = 128
         device = "cuda:0"
 
-    component = build_component(ComponentCfg(), registry=registry, device="cpu")
+    component = build_component(
+        ComponentCfg(), classes={"test": _Component}, device="cpu"
+    )
 
     assert component.width == 128
     assert component.device == "cpu"
-    assert registry.available() == ("test",)
 
 
 def test_component_builder_can_pass_complete_config():
-    registry = ComponentRegistry()
-    registry.register("configured", _ConfiguredComponent)
     cfg = {"class_name": "configured", "nested": {"value": 3}}
 
     component = build_component(
-        cfg, registry=registry, config_arg="cfg", env="environment"
+        cfg,
+        classes={"configured": _ConfiguredComponent},
+        config_arg="cfg",
+        env="environment",
     )
 
     assert component.cfg is cfg
