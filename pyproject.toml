@@ -12,6 +12,14 @@ dependencies = [
   "tensordict>=0.6.0",
 ]
 
+[project.optional-dependencies]
+gymnasium = ["gymnasium>=1.0"]
+dm-control = [
+  "gymnasium>=1.0",
+  "shimmy[dm-control]>=2.0",
+  "scipy>=1.13",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

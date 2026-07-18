@@ -210,7 +210,7 @@ class TDMPC2Runner(ModelBasedRunner):
         from tensordict import TensorDict
 
         if action is None:
-            action = torch.full_like(self.env.rand_act(), float("nan"))
+            action = torch.full_like(self._random_action(), float("nan"))
         action = action.to(obs.device)
         if reward is None:
             reward = torch.tensor(float("nan"), device=obs.device)
@@ -231,6 +231,29 @@ class TDMPC2Runner(ModelBasedRunner):
         )
         return td
 
+    def _reset_env(self) -> torch.Tensor:
+        obs = self.env.reset()
+        if obs.ndim > 1 and obs.shape[0] == 1:
+            obs = obs.squeeze(0)
+        return obs
+
+    def _step_env(
+        self, action: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, bool, dict]:
+        obs, reward, done, info = self.env.step(action)
+        if obs.ndim > 1 and obs.shape[0] == 1:
+            obs = obs.squeeze(0)
+        reward = reward.reshape(())
+        if isinstance(done, torch.Tensor):
+            done = bool(done.reshape(()).item())
+        return obs, reward, done, info
+
+    def _random_action(self) -> torch.Tensor:
+        action = self.env.rand_act()
+        if action.ndim > 1 and action.shape[0] == 1:
+            action = action.squeeze(0)
+        return action
+
     def eval(self) -> dict:
         """Evaluate agent for ``eval_episodes`` episodes."""
         ep_rewards: list[float] = []
@@ -240,14 +263,14 @@ class TDMPC2Runner(ModelBasedRunner):
             return {}
 
         for _i in range(self.cfg.eval_episodes):
-            obs = self.env.reset()
+            obs = self._reset_env()
             done = False
             info: dict = {}
             ep_reward = 0.0
             t = 0
             while not done:
                 action = self.agent.act(obs, t0=t == 0, eval_mode=True)
-                obs, reward, done, info = self.env.step(action)
+                obs, reward, done, info = self._step_env(action)
                 ep_reward += float(reward.item())
                 t += 1
             ep_rewards.append(ep_reward)
@@ -304,7 +327,7 @@ class TDMPC2Runner(ModelBasedRunner):
                     self._log(train_metrics, "train")
                     self._ep_idx = self.buffer.add(torch.cat(self._tds))
 
-                obs = self.env.reset()
+                obs = self._reset_env()
                 self._tds = [self._to_td(obs)]
 
             # Collect experience
@@ -312,8 +335,8 @@ class TDMPC2Runner(ModelBasedRunner):
             if self._step > self.seed_steps:
                 action = self.agent.act(obs, t0=len(self._tds) == 1)
             else:
-                action = self.env.rand_act()
-            obs, reward, done, info = self.env.step(action)
+                action = self._random_action()
+            obs, reward, done, info = self._step_env(action)
             self._tds.append(self._to_td(obs, action, reward, info.get("terminated")))
             collect_time = time() - collect_start
 

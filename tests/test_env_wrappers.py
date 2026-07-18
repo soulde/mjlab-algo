@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import numpy as np
 import torch
 
@@ -57,7 +59,10 @@ def test_gymnasium_wrapper_shapes_and_action_scaling():
     assert next_obs.shape == (1, 2)
     assert reward.tolist() == [1.5]
     assert done.tolist() == [True]
-    assert info == {"x": 1}
+    assert info["x"] == 1
+    assert info["terminated"] is False
+    assert info["truncated"] is True
+    assert info["time_outs"].tolist() == [True]
 
     random_action = wrapped.rand_act()
     assert random_action.shape == (1, 2)
@@ -87,6 +92,21 @@ def test_gymnasium_wrapper_flattens_dict_observations():
 
     assert wrapped.obs_dim == 3
     assert wrapped.reset().tolist() == [[1.0, 2.0, 3.0]]
+
+
+def test_gymnasium_make_delegates_to_gymnasium():
+    fake_gymnasium = type(
+        "FakeGymnasium",
+        (),
+        {"make": staticmethod(lambda env_id, **kwargs: _FakeGymnasiumEnv())},
+    )
+    with patch(
+        "mmrl.env_wrappers.gymnasium.import_module",
+        return_value=fake_gymnasium,
+    ):
+        wrapped = GymnasiumEnvWrapper.make("Pendulum-v1", device="cpu")
+
+    assert wrapped.obs_dim == 2
 
 
 class _FakeClassicGymEnv(_FakeGymnasiumEnv):

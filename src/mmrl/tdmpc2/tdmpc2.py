@@ -35,12 +35,17 @@ class TDMPC2(torch.nn.Module):
         super().__init__()
         values = config_to_dict(algorithm_cfg)
         values.pop("class_name", None)
+        values["bin_size"] = (
+            (algorithm_cfg.vmax - algorithm_cfg.vmin)
+            / (algorithm_cfg.num_bins - 1)
+        )
         values.update(
             {
                 "action_dim": env_spec.action_dim,
                 "episode_length": env_spec.episode_length,
                 "batch_size": batch_size,
                 "latent_dim": model.cfg.latent_dim,
+                "num_q": model.cfg.num_q,
                 "multitask": model.cfg.multitask,
                 "episode_lengths": model.cfg.episode_lengths,
             }
@@ -63,12 +68,15 @@ class TDMPC2(torch.nn.Module):
         if self.cfg.multitask:
             param_groups.append({"params": self.model._task_emb.parameters()})
 
-        self.optim = torch.optim.Adam(param_groups, lr=self.cfg.lr, capturable=True)
+        capturable = self.device.type == "cuda"
+        self.optim = torch.optim.Adam(
+            param_groups, lr=self.cfg.lr, capturable=capturable
+        )
         self.pi_optim = torch.optim.Adam(
             self.model._pi.parameters(),
             lr=self.cfg.lr,
             eps=1e-5,
-            capturable=True,
+            capturable=capturable,
         )
         self.model.eval()
         self.scale = RunningScale(algorithm_cfg)

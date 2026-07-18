@@ -1,6 +1,7 @@
 """Gymnasium environment wrapper."""
 
 from collections.abc import Mapping, Sequence
+from importlib import import_module
 from typing import Any
 
 import numpy as np
@@ -25,6 +26,28 @@ class GymnasiumEnvWrapper(EnvWrapper):
         self._action_high = torch.as_tensor(
             env.action_space.high, dtype=torch.float32
         ).reshape(1, -1)
+
+    @classmethod
+    def make(
+        cls,
+        env_id: str,
+        device: str | torch.device | None = None,
+        **kwargs: Any,
+    ) -> "GymnasiumEnvWrapper":
+        """Create and wrap a registered Gymnasium environment."""
+        if env_id.startswith("dm_control/"):
+            # Load Torch's optional native compiler modules before dm-control's
+            # EGL stack. This avoids a known loader conflict in mixed installs.
+            try:
+                import_module("triton")
+            except ImportError:
+                pass
+            shimmy = import_module("shimmy")
+            gymnasium = import_module("gymnasium")
+            gymnasium.register_envs(shimmy)
+        else:
+            gymnasium = import_module("gymnasium")
+        return cls(gymnasium.make(env_id, **kwargs), device=device)
 
     @property
     def num_envs(self) -> int:
@@ -78,6 +101,10 @@ class GymnasiumEnvWrapper(EnvWrapper):
         action_np = self._scale_action(action)
         obs, reward, terminated, truncated, info = self.env.step(action_np)
         done = terminated or truncated
+        info = dict(info)
+        info.setdefault("terminated", bool(terminated))
+        info.setdefault("truncated", bool(truncated))
+        info.setdefault("time_outs", torch.tensor([truncated], dtype=torch.bool))
         return (
             self._obs_to_tensor(obs),
             torch.tensor([reward], dtype=torch.float32),
