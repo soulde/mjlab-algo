@@ -2,14 +2,12 @@
 
 from mmrl.tdmpc2.config import (
     MODEL_SIZE as MODEL_SIZE,
-    TASK_SET as TASK_SET,
     TDMPC2Config as TDMPC2Config,
     make_tdmpc2_config as make_tdmpc2_config,
 )
 
 __all__ = [
     "MODEL_SIZE",
-    "TASK_SET",
     "TDMPC2",
     "TDMPC2Config",
     "TDMPC2Runner",

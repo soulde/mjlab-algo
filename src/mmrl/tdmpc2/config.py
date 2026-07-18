@@ -1,8 +1,4 @@
-"""Configuration for TD-MPC2.
-
-Dataclass-based config replacing Hydra/OmegaConf, consistent with
-mjlab's ``rl/config.py`` pattern.
-"""
+"""Python configuration classes for TD-MPC2."""
 
 from dataclasses import dataclass, field
 from typing import Literal
@@ -43,13 +39,6 @@ MODEL_SIZE: dict = {
     },
 }
 
-# Task sets for multi-task training (kept for compatibility)
-TASK_SET: dict = {
-    "mt30": [],
-    "mt80": [],
-}
-
-
 def _apply_model_size(cfg_dict: dict, model_size: int | None) -> dict:
     """Apply model size preset to config dict, overriding dimension fields."""
     if model_size is not None:
@@ -67,8 +56,7 @@ class TDMPC2Config:
     """Configuration for TD-MPC2 training and architecture.
 
     All algorithm hyperparameters, planning settings, architecture
-    dimensions, and logging options live here. Equivalent to the
-    original ``config.yaml``.
+    dimensions, and logging options live here.
     """
 
     # ── Environment ────────────────────────────────────────────────

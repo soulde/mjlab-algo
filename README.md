@@ -202,14 +202,14 @@ Planned upgrades:
 
 ## Development Checks
 
-Run these from the parent `mjlab` workspace:
+Run these from the repository root:
 
 ```sh
-uv run ruff check mmrl/src mmrl/tests
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run pytest mmrl/tests
+uv run ruff check src tests
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run pytest tests
 ```
 
-To refresh console scripts after changing `pyproject.toml` or `setup.py`:
+To refresh the editable installation after changing package metadata:
 
 ```sh
 uv pip install --python .venv/bin/python -e ./mmrl --no-build-isolation

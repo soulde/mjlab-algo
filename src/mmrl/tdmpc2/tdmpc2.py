@@ -12,7 +12,6 @@ import torch.nn.functional as F
 from tensordict import TensorDict
 
 from mmrl.tdmpc2 import math
-from mmrl.tdmpc2.layers import api_model_conversion
 from mmrl.tdmpc2.scale import RunningScale
 from mmrl.tdmpc2.world_model import WorldModel
 
@@ -103,7 +102,6 @@ class TDMPC2(torch.nn.Module):
                 weights_only=False,
             )
         state_dict = state_dict["model"] if "model" in state_dict else state_dict
-        state_dict = api_model_conversion(self.model.state_dict(), state_dict)
         self.model.load_state_dict(state_dict)
 
     @torch.no_grad()

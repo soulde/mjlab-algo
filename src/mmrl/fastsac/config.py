@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class FastSACConfig:
-    """Single-task Soft Actor-Critic configuration for MJLab environments."""
+    """Single-task Soft Actor-Critic configuration."""
 
     task: str = ""
     seed: int = 1
