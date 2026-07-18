@@ -1,21 +1,25 @@
-"""Configuration for FastSAC."""
+"""Python configuration classes for FastSAC."""
 
 from dataclasses import dataclass, field
 
 
 @dataclass
-class FastSACConfig:
-    """Single-task Soft Actor-Critic configuration."""
+class FastSACActorCfg:
+    class_name: str = "SquashedGaussianActor"
+    hidden_dims: tuple[int, ...] = (256, 256)
+    log_std_min: float = -20.0
+    log_std_max: float = 2.0
 
-    task: str = ""
-    seed: int = 1
-    total_steps: int = 1_000_000
-    num_envs: int = 1
-    batch_size: int = 256
-    buffer_size: int = 1_000_000
-    learning_starts: int = 5_000
-    train_every: int = 1
-    gradient_steps: int = 1
+
+@dataclass
+class FastSACCriticCfg:
+    class_name: str = "TwinQNetwork"
+    hidden_dims: tuple[int, ...] = (256, 256)
+
+
+@dataclass
+class FastSACAlgorithmCfg:
+    class_name: str = "FastSAC"
     gamma: float = 0.99
     tau: float = 0.005
     actor_lr: float = 3e-4
@@ -24,22 +28,28 @@ class FastSACConfig:
     init_alpha: float = 0.2
     target_entropy: float | None = None
     auto_entropy: bool = True
-    hidden_dims: tuple[int, ...] = (256, 256)
-    log_std_min: float = -20.0
-    log_std_max: float = 2.0
-    log_root: str = "logs/fastsac"
-    exp_name: str = "default"
-    save_agent: bool = True
+
+
+@dataclass
+class OffPolicyMemoryCfg:
+    class_name: str = "OffPolicyReplayMemory"
+    capacity: int = 1_000_000
+    batch_size: int = 256
+
+
+@dataclass
+class FastSACRunnerCfg:
+    """RSL-RL style runner configuration owned by environment packages."""
+
+    seed: int = 1
+    total_steps: int = 1_000_000
+    learning_starts: int = 5_000
+    train_every: int = 1
+    gradient_steps: int = 1
     save_interval: int = 100_000
     log_interval: int = 1_000
     device: str | None = None
-
-    obs_dim: int = 0
-    action_dim: int = 0
-    episode_length: int = 0
-    metrics: dict[str, float] = field(default_factory=dict)
-
-
-def make_fastsac_config(**overrides) -> FastSACConfig:
-    """Create a FastSAC config with keyword overrides."""
-    return FastSACConfig(**overrides)
+    algorithm: FastSACAlgorithmCfg = field(default_factory=FastSACAlgorithmCfg)
+    actor: FastSACActorCfg = field(default_factory=FastSACActorCfg)
+    critic: FastSACCriticCfg = field(default_factory=FastSACCriticCfg)
+    memory: OffPolicyMemoryCfg = field(default_factory=OffPolicyMemoryCfg)

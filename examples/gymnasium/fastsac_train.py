@@ -15,8 +15,7 @@ import numpy as np
 import torch
 
 from mmrl.env_wrappers.gymnasium import GymnasiumEnvWrapper
-from mmrl.fastsac import FastSAC, FastSACConfig, FastSACRunner
-from mmrl.memories import OffPolicyReplayMemory
+from mmrl.fastsac import FastSACRunner, FastSACRunnerCfg, OffPolicyMemoryCfg
 
 
 def parse_args() -> argparse.Namespace:
@@ -41,37 +40,24 @@ def main() -> None:
 
     env = gym.make(args.env_id)
     wrapped_env = GymnasiumEnvWrapper(env, device=args.device)
-    obs = wrapped_env.reset()
-
-    cfg = FastSACConfig(
-        task=args.env_id,
+    cfg = FastSACRunnerCfg(
         seed=args.seed,
         total_steps=args.total_steps,
-        num_envs=wrapped_env.num_envs,
         learning_starts=args.learning_starts,
-        batch_size=args.batch_size,
-        buffer_size=args.buffer_size,
         device=str(wrapped_env.device),
-        obs_dim=obs.shape[-1],
-        action_dim=wrapped_env.action_dim,
-        exp_name=args.exp_name,
-        log_root=args.log_root,
+        memory=OffPolicyMemoryCfg(
+            capacity=args.buffer_size,
+            batch_size=args.batch_size,
+        ),
     )
     log_dir = (
-        Path(cfg.log_root)
-        / cfg.exp_name
+        Path(args.log_root)
+        / args.exp_name
         / str(cfg.seed)
         / datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     )
 
-    agent = FastSAC(cfg)
-    memory = OffPolicyReplayMemory(
-        capacity=cfg.buffer_size,
-        obs_dim=cfg.obs_dim,
-        action_dim=cfg.action_dim,
-        device=agent.device,
-    )
-    runner = FastSACRunner(cfg, wrapped_env, agent, memory, log_dir)
+    runner = FastSACRunner(wrapped_env, cfg, log_dir)
     try:
         runner.train()
     finally:

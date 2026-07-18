@@ -57,7 +57,7 @@ Gymnasium packages construct their own environment and own their `train.py` and
 Top-level imports:
 
 ```python
-from mmrl import FastSAC, FastSACConfig, FastSACRunner
+from mmrl import FastSAC, FastSACRunner, FastSACRunnerCfg
 from mmrl import TDMPC2, TDMPC2Config, TDMPC2Runner
 ```
 
@@ -66,7 +66,6 @@ Algorithm-specific imports:
 ```python
 from mmrl.fastsac import FastSAC
 from mmrl.memories import OffPolicyReplayMemory
-from mmrl.fastsac import FastSACConfig, make_fastsac_config
 from mmrl.tdmpc2 import TDMPC2, TDMPC2Config, make_tdmpc2_config
 ```
 

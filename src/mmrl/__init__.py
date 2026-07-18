@@ -7,22 +7,28 @@ from mmrl.config import (
 )
 from mmrl.fastsac import (
     FastSAC,
-    FastSACConfig,
+    FastSACActorCfg,
+    FastSACAlgorithmCfg,
+    FastSACCriticCfg,
     FastSACRunner,
-    make_fastsac_config,
+    FastSACRunnerCfg,
+    OffPolicyMemoryCfg,
 )
 from mmrl.tdmpc2.config import TDMPC2Config, make_tdmpc2_config
 
 __all__ = [
     "FastSAC",
-    "FastSACConfig",
+    "FastSACActorCfg",
+    "FastSACAlgorithmCfg",
+    "FastSACCriticCfg",
     "FastSACRunner",
+    "FastSACRunnerCfg",
+    "OffPolicyMemoryCfg",
     "TDMPC2",
     "TDMPC2Config",
     "TDMPC2Runner",
     "config_to_dict",
     "get_config_value",
-    "make_fastsac_config",
     "make_tdmpc2_config",
     "require_config_value",
 ]

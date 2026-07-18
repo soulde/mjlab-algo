@@ -5,7 +5,7 @@ import argparse
 import gymnasium as gym
 
 from mmrl.env_wrappers.gymnasium import GymnasiumEnvWrapper
-from mmrl.fastsac import FastSAC, FastSACConfig
+from mmrl.fastsac import FastSAC, FastSACRunnerCfg
 
 
 def parse_args() -> argparse.Namespace:
@@ -21,15 +21,13 @@ def main() -> None:
     args = parse_args()
     env = gym.make(args.env_id, render_mode="human")
     wrapped_env = GymnasiumEnvWrapper(env, device=args.device)
-    obs = wrapped_env.reset()
-
-    cfg = FastSACConfig(
-        task=args.env_id,
-        device=str(wrapped_env.device),
-        obs_dim=obs.shape[-1],
+    cfg = FastSACRunnerCfg(device=str(wrapped_env.device))
+    agent = FastSAC(
+        cfg,
+        obs_dim=wrapped_env.obs_dim,
         action_dim=wrapped_env.action_dim,
+        device=wrapped_env.device,
     )
-    agent = FastSAC(cfg)
     agent.load(args.checkpoint)
 
     try:
@@ -46,4 +44,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

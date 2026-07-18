@@ -5,7 +5,7 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 
-from mmrl.fastsac.config import FastSACConfig
+from mmrl.config import get_config_value
 from mmrl.fastsac.networks import (
     SquashedGaussianActor,
     TwinQNetwork,
@@ -17,41 +17,44 @@ from mmrl.memories import OffPolicyBatch
 class FastSAC:
     """Soft Actor-Critic agent for flat continuous-control observations."""
 
-    def __init__(self, cfg: FastSACConfig):
-        if cfg.obs_dim <= 0 or cfg.action_dim <= 0:
-            raise ValueError("FastSACConfig.obs_dim and action_dim must be set.")
+    def __init__(self, cfg, obs_dim: int, action_dim: int, device: torch.device):
         self.cfg = cfg
-        self.device = torch.device(
-            cfg.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
-        )
+        self.obs_dim = int(obs_dim)
+        self.action_dim = int(action_dim)
+        self.device = torch.device(device)
         self.actor = SquashedGaussianActor(
-            cfg.obs_dim,
-            cfg.action_dim,
-            cfg.hidden_dims,
-            cfg.log_std_min,
-            cfg.log_std_max,
+            self.obs_dim,
+            self.action_dim,
+            tuple(get_config_value(cfg, "actor.hidden_dims")),
+            get_config_value(cfg, "actor.log_std_min"),
+            get_config_value(cfg, "actor.log_std_max"),
         ).to(self.device)
-        self.critic = TwinQNetwork(cfg.obs_dim, cfg.action_dim, cfg.hidden_dims).to(
-            self.device
-        )
+        critic_dims = tuple(get_config_value(cfg, "critic.hidden_dims"))
+        self.critic = TwinQNetwork(self.obs_dim, self.action_dim, critic_dims).to(self.device)
         self.target_critic = TwinQNetwork(
-            cfg.obs_dim, cfg.action_dim, cfg.hidden_dims
+            self.obs_dim, self.action_dim, critic_dims
         ).to(self.device)
         self.actor.apply(init_weights)
         self.critic.apply(init_weights)
         self.target_critic.load_state_dict(self.critic.state_dict())
 
-        self.actor_optim = torch.optim.Adam(self.actor.parameters(), lr=cfg.actor_lr)
-        self.critic_optim = torch.optim.Adam(self.critic.parameters(), lr=cfg.critic_lr)
+        self.actor_optim = torch.optim.Adam(
+            self.actor.parameters(), lr=get_config_value(cfg, "algorithm.actor_lr")
+        )
+        self.critic_optim = torch.optim.Adam(
+            self.critic.parameters(), lr=get_config_value(cfg, "algorithm.critic_lr")
+        )
         self.log_alpha = torch.tensor(
-            float(torch.log(torch.tensor(cfg.init_alpha))),
+            float(torch.log(torch.tensor(get_config_value(cfg, "algorithm.init_alpha")))),
             device=self.device,
             requires_grad=True,
         )
-        self.alpha_optim = torch.optim.Adam([self.log_alpha], lr=cfg.alpha_lr)
-        self.target_entropy = cfg.target_entropy
+        self.alpha_optim = torch.optim.Adam(
+            [self.log_alpha], lr=get_config_value(cfg, "algorithm.alpha_lr")
+        )
+        self.target_entropy = get_config_value(cfg, "algorithm.target_entropy")
         if self.target_entropy is None:
-            self.target_entropy = -float(cfg.action_dim)
+            self.target_entropy = -float(self.action_dim)
 
     @property
     def alpha(self) -> torch.Tensor:
@@ -73,7 +76,9 @@ class FastSAC:
             target_q = (
                 torch.min(target_q1, target_q2) - self.alpha.detach() * next_log_prob
             )
-            target = batch.reward + self.cfg.gamma * (1.0 - batch.done) * target_q
+            target = batch.reward + get_config_value(
+                self.cfg, "algorithm.gamma"
+            ) * (1.0 - batch.done) * target_q
 
         q1, q2 = self.critic(batch.obs, batch.action)
         critic_loss = F.mse_loss(q1, target) + F.mse_loss(q2, target)
@@ -88,7 +93,7 @@ class FastSAC:
         actor_loss.backward()
         self.actor_optim.step()
 
-        if self.cfg.auto_entropy:
+        if get_config_value(self.cfg, "algorithm.auto_entropy"):
             alpha_loss = -(
                 self.log_alpha * (log_prob + self.target_entropy).detach()
             ).mean()
@@ -111,8 +116,9 @@ class FastSAC:
             for param, target_param in zip(
                 self.critic.parameters(), self.target_critic.parameters(), strict=True
             ):
-                target_param.data.mul_(1.0 - self.cfg.tau)
-                target_param.data.add_(self.cfg.tau * param.data)
+                tau = get_config_value(self.cfg, "algorithm.tau")
+                target_param.data.mul_(1.0 - tau)
+                target_param.data.add_(tau * param.data)
 
     def save(self, path: str | Path) -> None:
         path = Path(path)

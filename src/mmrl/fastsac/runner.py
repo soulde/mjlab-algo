@@ -6,7 +6,7 @@ from time import time
 
 import torch
 
-from mmrl.fastsac.config import FastSACConfig
+from mmrl.config import get_config_value
 from mmrl.fastsac.fastsac import FastSAC
 from mmrl.env_wrappers import EnvWrapper
 from mmrl.logging import format_training_log
@@ -19,21 +19,65 @@ class FastSACRunner(OffPolicyRunner):
 
     def __init__(
         self,
-        cfg: FastSACConfig,
         env: EnvWrapper,
-        agent: FastSAC,
-        buffer: OffPolicyReplayMemory,
+        train_cfg,
         log_dir: str | Path,
+        device: str | torch.device | None = None,
     ):
-        self.cfg = cfg
+        self.cfg = train_cfg
         self.env = env
-        self.agent = agent
-        self.buffer = buffer
+        self.device = torch.device(
+            device or get_config_value(train_cfg, "device") or env.device
+        )
+        self._validate_components()
+        self.agent = FastSAC(
+            train_cfg,
+            obs_dim=env.obs_dim,
+            action_dim=env.action_dim,
+            device=self.device,
+        )
+        self.buffer = OffPolicyReplayMemory(
+            capacity=get_config_value(train_cfg, "memory.capacity"),
+            obs_dim=env.obs_dim,
+            action_dim=env.action_dim,
+            device=self.device,
+        )
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self._start_time = time()
         self._rewbuffer: deque[float] = deque(maxlen=100)
         self._lenbuffer: deque[float] = deque(maxlen=100)
+
+    def _validate_components(self) -> None:
+        supported = {
+            "algorithm.class_name": "FastSAC",
+            "actor.class_name": "SquashedGaussianActor",
+            "critic.class_name": "TwinQNetwork",
+            "memory.class_name": "OffPolicyReplayMemory",
+        }
+        for path, expected in supported.items():
+            actual = get_config_value(self.cfg, path)
+            if actual != expected:
+                raise ValueError(
+                    f"Unsupported {path} {actual!r}; FastSACRunner supports {expected!r}."
+                )
+
+    def get_inference_policy(self, device: str | torch.device | None = None):
+        """Return a deterministic policy callable for environment play scripts."""
+        if device is not None:
+            self.agent.device = torch.device(device)
+            self.agent.actor.to(self.agent.device)
+
+        def policy(obs: torch.Tensor) -> torch.Tensor:
+            return self.agent.act(obs, eval_mode=True)
+
+        return policy
+
+    def save(self, path: str | Path) -> None:
+        self.agent.save(path)
+
+    def load(self, path: str | Path) -> None:
+        self.agent.load(path)
 
     def train(self) -> None:
         obs = self.env.reset()
@@ -41,14 +85,16 @@ class FastSACRunner(OffPolicyRunner):
         last_metrics: dict[str, float] = {}
         episode_reward = torch.zeros(self.env.num_envs)
         episode_length = torch.zeros(self.env.num_envs)
-        next_log_step = self.cfg.log_interval if self.cfg.log_interval > 0 else -1
+        log_interval = get_config_value(self.cfg, "log_interval")
+        total_steps = get_config_value(self.cfg, "total_steps")
+        next_log_step = log_interval if log_interval > 0 else -1
         interval_collection_time = 0.0
         interval_learning_time = 0.0
         interval_start_step = 0
 
-        while step < self.cfg.total_steps:
+        while step < total_steps:
             collect_start = time()
-            if step < self.cfg.learning_starts:
+            if step < get_config_value(self.cfg, "learning_starts"):
                 action = self.env.rand_act()
             else:
                 action = self.agent.act(obs)
@@ -74,23 +120,25 @@ class FastSACRunner(OffPolicyRunner):
                 episode_length[done.cpu()] = 0.0
 
             should_train = (
-                step >= self.cfg.learning_starts
-                and self.buffer.size >= self.cfg.batch_size
-                and step % self.cfg.train_every == 0
+                step >= get_config_value(self.cfg, "learning_starts")
+                and self.buffer.size >= get_config_value(self.cfg, "memory.batch_size")
+                and step % get_config_value(self.cfg, "train_every") == 0
             )
             if should_train:
                 learn_start = time()
-                for _ in range(self.cfg.gradient_steps):
-                    batch = self.buffer.sample(self.cfg.batch_size)
+                for _ in range(get_config_value(self.cfg, "gradient_steps")):
+                    batch = self.buffer.sample(
+                        get_config_value(self.cfg, "memory.batch_size")
+                    )
                     last_metrics = self.agent.update(batch)
                 interval_learning_time += time() - learn_start
 
-            if self.cfg.log_interval > 0 and step >= next_log_step:
+            if log_interval > 0 and step >= next_log_step:
                 elapsed = max(time() - self._start_time, 1e-6)
                 interval_time = interval_collection_time + interval_learning_time
                 interval_steps = max(step - interval_start_step, 1)
                 sps = interval_steps / max(interval_time, 1e-6)
-                remaining_steps = max(self.cfg.total_steps - step, 0)
+                remaining_steps = max(total_steps - step, 0)
                 eta = remaining_steps / max(step / elapsed, 1e-6)
                 losses = {
                     key.removesuffix("_loss"): value
@@ -109,7 +157,7 @@ class FastSACRunner(OffPolicyRunner):
                 )
                 print(
                     format_training_log(
-                        title=f"FastSAC step {step}/{self.cfg.total_steps}",
+                        title=f"FastSAC step {step}/{total_steps}",
                         total_steps=step,
                         steps_per_second=sps,
                         collection_time=interval_collection_time,
@@ -131,14 +179,12 @@ class FastSACRunner(OffPolicyRunner):
                 interval_learning_time = 0.0
                 interval_start_step = step
                 while next_log_step <= step:
-                    next_log_step += self.cfg.log_interval
+                    next_log_step += log_interval
 
             if (
-                self.cfg.save_agent
-                and self.cfg.save_interval > 0
-                and step % self.cfg.save_interval == 0
+                get_config_value(self.cfg, "save_interval") > 0
+                and step % get_config_value(self.cfg, "save_interval") == 0
             ):
-                self.agent.save(self.log_dir / "models" / f"model_{step}.pt")
+                self.save(self.log_dir / "models" / f"model_{step}.pt")
 
-        if self.cfg.save_agent:
-            self.agent.save(self.log_dir / "models" / "final.pt")
+        self.save(self.log_dir / "models" / "final.pt")
