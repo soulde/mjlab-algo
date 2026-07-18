@@ -22,10 +22,14 @@ class TDMPC2(torch.nn.Module):
     Supports state and pixel observations, with optional MPPI planning.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, device: str | torch.device | None = None):
         super().__init__()
         self.cfg = cfg
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(
+            device
+            or cfg.device
+            or ("cuda:0" if torch.cuda.is_available() else "cpu")
+        )
         self.model = WorldModel(cfg).to(self.device)
 
         param_groups: list[dict] = [

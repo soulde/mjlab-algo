@@ -59,6 +59,9 @@ class TDMPC2Config:
     dimensions, and logging options live here.
     """
 
+    class_name: str = "TDMPC2"
+    memory_class_name: str = "EpisodeMemory"
+
     # ── Environment ────────────────────────────────────────────────
     task: str = "dog-run"
     """Task name (e.g., ``Mjlab-Cartpole-Balance``)."""

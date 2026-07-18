@@ -8,18 +8,16 @@ from __future__ import annotations
 
 from pathlib import Path
 from time import time
-from typing import TYPE_CHECKING
-
 import numpy as np
 import torch
 
+from mmrl.config import config_to_dict
 from mmrl.logging import format_training_log
 from mmrl.runners.model_based import ModelBasedRunner
 from mmrl.env_wrappers import EnvWrapper
 from mmrl.memories import EpisodeMemory
 
-if TYPE_CHECKING:
-    from mmrl.tdmpc2.tdmpc2 import TDMPC2
+from mmrl.tdmpc2.tdmpc2 import TDMPC2
 
 
 class TDMPC2Runner(ModelBasedRunner):
@@ -31,16 +29,41 @@ class TDMPC2Runner(ModelBasedRunner):
 
     def __init__(
         self,
-        cfg,
         env: EnvWrapper,
-        agent: TDMPC2,
-        buffer: EpisodeMemory,
+        train_cfg,
         log_dir: Path,
+        device: str | torch.device | None = None,
     ):
-        self.cfg = cfg
+        if env.num_envs != 1:
+            raise ValueError("TDMPC2Runner requires a single environment.")
+        if train_cfg.class_name != "TDMPC2":
+            raise ValueError(f"Unsupported class_name {train_cfg.class_name!r}.")
+        if train_cfg.memory_class_name != "EpisodeMemory":
+            raise ValueError(
+                f"Unsupported memory_class_name {train_cfg.memory_class_name!r}."
+            )
+        self.cfg = train_cfg
         self.env = env
-        self.agent = agent
-        self.buffer = buffer
+        self.device = torch.device(device or train_cfg.device or env.device)
+        self.cfg.device = str(self.device)
+        self.cfg.obs_shape = {"state": (env.obs_dim,)}
+        self.cfg.action_dim = env.action_dim
+        if self.cfg.episode_length <= 0:
+            self.cfg.episode_length = int(
+                getattr(env.unwrapped, "max_episode_length", 0)
+            )
+        if self.cfg.episode_length <= 0:
+            raise ValueError(
+                "TDMPC2Config.episode_length must be set when the environment "
+                "does not expose max_episode_length."
+            )
+        if self.cfg.seed_steps <= 0:
+            self.cfg.seed_steps = max(1000, 5 * self.cfg.episode_length)
+        self.cfg.bin_size = (self.cfg.vmax - self.cfg.vmin) / (
+            self.cfg.num_bins - 1
+        )
+        self.agent = TDMPC2(self.cfg, device=self.device)
+        self.buffer = EpisodeMemory(self.cfg)
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -50,6 +73,25 @@ class TDMPC2Runner(ModelBasedRunner):
         self._wandb = None
 
         self._setup_wandb()
+
+    def get_inference_policy(self, device: str | torch.device | None = None):
+        """Return the TD-MPC2 policy callable used by play scripts."""
+        if device is not None:
+            self.agent.device = torch.device(device)
+            self.agent.model.to(self.agent.device)
+
+        def policy(obs: torch.Tensor, t0: bool = False) -> torch.Tensor:
+            return self.agent.act(obs, t0=t0, eval_mode=True)
+
+        return policy
+
+    def save(self, path: str | Path) -> None:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.agent.save(str(path))
+
+    def load(self, path: str | Path) -> None:
+        self.agent.load(path)
 
     def _setup_wandb(self) -> None:
         """Initialize W&B logging."""
@@ -64,9 +106,7 @@ class TDMPC2Runner(ModelBasedRunner):
                 name=str(self.cfg.seed),
                 group=self.cfg.exp_name,
                 dir=str(self.log_dir),
-                config={
-                    k: v for k, v in self.cfg.__dict__.items() if not k.startswith("_")
-                },
+                config=config_to_dict(self.cfg),
                 settings=wandb.Settings(silent=True) if self.cfg.wandb_silent else None,
             )
             self._wandb = wandb
@@ -296,7 +336,7 @@ class TDMPC2Runner(ModelBasedRunner):
         if self.cfg.save_agent:
             save_path = self.log_dir / "models" / "final.pt"
             save_path.parent.mkdir(parents=True, exist_ok=True)
-            self.agent.save(str(save_path))
+            self.save(save_path)
             print(f"Saved final model to {save_path}")
 
         if self._wandb is not None:
