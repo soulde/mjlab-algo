@@ -26,6 +26,7 @@ from mmrl.ppo import (
 from mmrl.tdmpc2.config import (
     EpisodeMemoryCfg,
     TDMPC2AlgorithmCfg,
+    TDMPC2EnvSpec,
     TDMPC2ModelCfg,
     TDMPC2RunnerCfg,
 )
@@ -48,6 +49,7 @@ __all__ = [
     "TDMPC2",
     "EpisodeMemoryCfg",
     "TDMPC2AlgorithmCfg",
+    "TDMPC2EnvSpec",
     "TDMPC2ModelCfg",
     "TDMPC2Runner",
     "TDMPC2RunnerCfg",

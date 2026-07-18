@@ -10,9 +10,11 @@ Implements training + inference for model-based RL with:
 import torch
 import torch.nn.functional as F
 from tensordict import TensorDict
+from types import SimpleNamespace
 
 from mmrl.models.tdmpc2 import math
 from mmrl.models.tdmpc2.world_model import WorldModel
+from mmrl.config import config_to_dict
 from mmrl.tdmpc2.scale import RunningScale
 
 
@@ -22,15 +24,30 @@ class TDMPC2(torch.nn.Module):
     Supports state and pixel observations, with optional MPPI planning.
     """
 
-    def __init__(self, cfg, device: str | torch.device | None = None):
+    def __init__(
+        self,
+        algorithm_cfg,
+        model: WorldModel,
+        env_spec,
+        batch_size: int,
+        device: str | torch.device,
+    ):
         super().__init__()
-        self.cfg = cfg
-        self.device = torch.device(
-            device
-            or cfg.device
-            or ("cuda:0" if torch.cuda.is_available() else "cpu")
+        values = config_to_dict(algorithm_cfg)
+        values.pop("class_name", None)
+        values.update(
+            {
+                "action_dim": env_spec.action_dim,
+                "episode_length": env_spec.episode_length,
+                "batch_size": batch_size,
+                "latent_dim": model.cfg.latent_dim,
+                "multitask": model.cfg.multitask,
+                "episode_lengths": model.cfg.episode_lengths,
+            }
         )
-        self.model = WorldModel(cfg).to(self.device)
+        self.cfg = SimpleNamespace(**values)
+        self.device = torch.device(device)
+        self.model = model.to(self.device)
 
         param_groups: list[dict] = [
             {
@@ -54,19 +71,19 @@ class TDMPC2(torch.nn.Module):
             capturable=True,
         )
         self.model.eval()
-        self.scale = RunningScale(cfg)
+        self.scale = RunningScale(algorithm_cfg)
         self.cfg.iterations += 2 * int(
-            cfg.action_dim >= 20
+            env_spec.action_dim >= 20
         )  # Heuristic for large action spaces
         self.discount = (
             torch.tensor(
-                [self._get_discount(ep_len) for ep_len in cfg.episode_lengths],
+                [self._get_discount(ep_len) for ep_len in model.cfg.episode_lengths],
                 device=self.device,
             )
             if self.cfg.multitask
-            else self._get_discount(cfg.episode_length)
+            else self._get_discount(env_spec.episode_length)
         )
-        print("Episode length:", cfg.episode_length)
+        print("Episode length:", env_spec.episode_length)
         print("Discount factor:", self.discount)
         self._prev_mean = torch.nn.Buffer(
             torch.zeros(self.cfg.horizon, self.cfg.action_dim, device=self.device)

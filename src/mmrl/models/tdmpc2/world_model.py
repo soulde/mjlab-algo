@@ -5,6 +5,7 @@ termination predictor (optional), policy prior, and ensemble of Q-functions.
 """
 
 from copy import deepcopy
+from types import SimpleNamespace
 
 import torch
 import torch.nn as nn
@@ -13,6 +14,7 @@ from tensordict.nn import TensorDictParams
 
 from mmrl.models.tdmpc2 import init, layers, math
 from mmrl.models.base import Model
+from mmrl.config import config_to_dict
 
 
 class WorldModel(Model):
@@ -22,9 +24,28 @@ class WorldModel(Model):
     and supports both state and pixel observations.
     """
 
-    def __init__(self, cfg):
+    def __init__(self, model_cfg, algorithm_cfg, env_spec):
         super().__init__()
-        self.cfg = cfg
+        values = config_to_dict(model_cfg)
+        values.pop("class_name", None)
+        if not values["multitask"]:
+            values["task_dim"] = 0
+        values.update(
+            {
+                "tau": algorithm_cfg.tau,
+                "num_bins": algorithm_cfg.num_bins,
+                "vmin": algorithm_cfg.vmin,
+                "vmax": algorithm_cfg.vmax,
+                "bin_size": (
+                    (algorithm_cfg.vmax - algorithm_cfg.vmin)
+                    / (algorithm_cfg.num_bins - 1)
+                ),
+                "episodic": algorithm_cfg.episodic,
+                "obs_shape": env_spec.obs_shape,
+                "action_dim": env_spec.action_dim,
+            }
+        )
+        cfg = self.cfg = SimpleNamespace(**values)
         if cfg.multitask:
             self._task_emb = nn.Embedding(len(cfg.tasks), cfg.task_dim, max_norm=1)
             self.register_buffer(

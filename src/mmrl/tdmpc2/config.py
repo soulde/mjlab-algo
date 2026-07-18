@@ -111,6 +111,13 @@ class EpisodeMemoryCfg:
     batch_size: int = 256
 
 
+@dataclass(frozen=True)
+class TDMPC2EnvSpec:
+    obs_shape: dict[str, tuple[int, ...]]
+    action_dim: int
+    episode_length: int
+
+
 @dataclass
 class TDMPC2RunnerCfg:
     """Top-level config passed by an environment package to TDMPC2Runner."""

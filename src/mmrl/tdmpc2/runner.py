@@ -7,7 +7,6 @@ experience collection, agent updates, evaluation, and logging.
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
 from time import time
 import numpy as np
 import torch
@@ -18,6 +17,8 @@ from mmrl.runners.model_based import ModelBasedRunner
 from mmrl.env_wrappers import EnvWrapper
 from mmrl.memories import EpisodeMemory
 
+from mmrl.models import WorldModel
+from mmrl.tdmpc2.config import TDMPC2EnvSpec
 from mmrl.tdmpc2.tdmpc2 import TDMPC2
 
 
@@ -49,6 +50,7 @@ class TDMPC2Runner(ModelBasedRunner):
                 f"Unsupported memory.class_name {memory_name!r}."
             )
         self.train_cfg = train_cfg
+        self.cfg = train_cfg
         self.env = env
         self.device = torch.device(
             device or get_config_value(train_cfg, "device") or env.device
@@ -61,8 +63,24 @@ class TDMPC2Runner(ModelBasedRunner):
                 "TDMPC2RunnerCfg.episode_length must be set when the environment "
                 "does not expose max_episode_length."
             )
-        self.cfg = self._make_runtime_cfg(episode_length)
-        self.agent = TDMPC2(self.cfg, device=self.device)
+        self.env_spec = TDMPC2EnvSpec(
+            obs_shape={"state": (env.obs_dim,)},
+            action_dim=env.action_dim,
+            episode_length=episode_length,
+        )
+        self.seed_steps = get_config_value(train_cfg, "seed_steps")
+        if self.seed_steps <= 0:
+            self.seed_steps = max(1000, 5 * episode_length)
+        algorithm_cfg = get_config_value(train_cfg, "algorithm")
+        model_cfg = get_config_value(train_cfg, "model")
+        self.model = WorldModel(model_cfg, algorithm_cfg, self.env_spec)
+        self.agent = TDMPC2(
+            algorithm_cfg,
+            self.model,
+            self.env_spec,
+            batch_size=get_config_value(train_cfg, "memory.batch_size"),
+            device=self.device,
+        )
         self.buffer = EpisodeMemory(
             capacity=get_config_value(train_cfg, "memory.capacity"),
             batch_size=get_config_value(train_cfg, "memory.batch_size"),
@@ -78,29 +96,6 @@ class TDMPC2Runner(ModelBasedRunner):
         self._wandb = None
 
         self._setup_wandb()
-
-    def _make_runtime_cfg(self, episode_length: int) -> SimpleNamespace:
-        values = config_to_dict(self.train_cfg)
-        algorithm = values.pop("algorithm")
-        model = values.pop("model")
-        memory = values.pop("memory")
-        algorithm.pop("class_name", None)
-        model.pop("class_name", None)
-        memory.pop("class_name", None)
-        values.update(algorithm)
-        values.update(model)
-        values["buffer_size"] = memory["capacity"]
-        values["batch_size"] = memory["batch_size"]
-        values["device"] = str(self.device)
-        values["obs_shape"] = {"state": (self.env.obs_dim,)}
-        values["action_dim"] = self.env.action_dim
-        values["episode_length"] = episode_length
-        if values["seed_steps"] <= 0:
-            values["seed_steps"] = max(1000, 5 * episode_length)
-        values["bin_size"] = (values["vmax"] - values["vmin"]) / (
-            values["num_bins"] - 1
-        )
-        return SimpleNamespace(**values)
 
     def get_inference_policy(self, device: str | torch.device | None = None):
         """Return the TD-MPC2 policy callable used by play scripts."""
@@ -290,7 +285,9 @@ class TDMPC2Runner(ModelBasedRunner):
                     eval_next = False
 
                 if self._step > 0:
-                    if info.get("terminated", False) and not self.cfg.episodic:
+                    if info.get("terminated", False) and not get_config_value(
+                        self.cfg, "algorithm.episodic"
+                    ):
                         raise ValueError(
                             "Termination detected but episodic mode is off. "
                             "Set ``episodic=True`` to enable terminations."
@@ -312,7 +309,7 @@ class TDMPC2Runner(ModelBasedRunner):
 
             # Collect experience
             collect_start = time()
-            if self._step > self.cfg.seed_steps:
+            if self._step > self.seed_steps:
                 action = self.agent.act(obs, t0=len(self._tds) == 1)
             else:
                 action = self.env.rand_act()
@@ -322,9 +319,9 @@ class TDMPC2Runner(ModelBasedRunner):
 
             # Update agent
             learn_time = 0.0
-            if self._step >= self.cfg.seed_steps:
-                if self._step == self.cfg.seed_steps:
-                    num_updates = self.cfg.seed_steps
+            if self._step >= self.seed_steps:
+                if self._step == self.seed_steps:
+                    num_updates = self.seed_steps
                     print("Pretraining agent on seed data...")
                 else:
                     num_updates = 1

@@ -61,9 +61,18 @@ class _RunnerEnv(EnvWrapper):
 
 
 def test_runner_builds_fixed_agent_and_memory(monkeypatch, tmp_path):
+    class FakeModel:
+        def __init__(self, model_cfg, algorithm_cfg, env_spec):
+            self.model_cfg = model_cfg
+            self.algorithm_cfg = algorithm_cfg
+            self.env_spec = env_spec
+
     class FakeAgent:
-        def __init__(self, cfg, device):
-            self.cfg = cfg
+        def __init__(self, algorithm_cfg, model, env_spec, batch_size, device):
+            self.algorithm_cfg = algorithm_cfg
+            self.model = model
+            self.env_spec = env_spec
+            self.batch_size = batch_size
             self.device = device
 
     class FakeMemory:
@@ -71,15 +80,16 @@ def test_runner_builds_fixed_agent_and_memory(monkeypatch, tmp_path):
             self.kwargs = kwargs
 
     monkeypatch.setattr("mmrl.tdmpc2.runner.TDMPC2", FakeAgent)
+    monkeypatch.setattr("mmrl.tdmpc2.runner.WorldModel", FakeModel)
     monkeypatch.setattr("mmrl.tdmpc2.runner.EpisodeMemory", FakeMemory)
     cfg = TDMPC2RunnerCfg(enable_wandb=False, episode_length=0)
 
     runner = TDMPC2Runner(_RunnerEnv(), cfg, tmp_path)
 
-    assert runner.cfg.obs_shape == {"state": (3,)}
-    assert runner.cfg.action_dim == 2
-    assert runner.cfg.episode_length == 50
-    assert runner.agent.cfg is runner.cfg
+    assert runner.env_spec.obs_shape == {"state": (3,)}
+    assert runner.env_spec.action_dim == 2
+    assert runner.env_spec.episode_length == 50
+    assert runner.agent.algorithm_cfg is cfg.algorithm
     assert runner.buffer.kwargs["capacity"] == cfg.memory.capacity
 
 
@@ -115,14 +125,19 @@ def test_runner_accepts_nested_class_style_config(monkeypatch, tmp_path):
         model = TDMPC2ModelCfg(model_size=1)
         memory = EpisodeMemoryCfg(capacity=100, batch_size=2)
 
+    class FakeModel:
+        def __init__(self, model_cfg, algorithm_cfg, env_spec):
+            self.cfg = model_cfg
+
     class FakeAgent:
-        def __init__(self, cfg, device):
-            self.cfg = cfg
+        def __init__(self, algorithm_cfg, model, env_spec, batch_size, device):
+            self.cfg = algorithm_cfg
             self.device = device
 
     monkeypatch.setattr("mmrl.tdmpc2.runner.TDMPC2", FakeAgent)
+    monkeypatch.setattr("mmrl.tdmpc2.runner.WorldModel", FakeModel)
     runner = TDMPC2Runner(_RunnerEnv(), TrainCfg(), tmp_path)
 
-    assert runner.cfg.enc_dim == 256
-    assert runner.cfg.buffer_size == 100
+    assert runner.model.cfg.enc_dim == 256
+    assert runner.env_spec.action_dim == 2
     assert runner.buffer._batch_size == 2
