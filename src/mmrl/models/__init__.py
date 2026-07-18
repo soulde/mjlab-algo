@@ -1,5 +1,6 @@
 """Reusable model building blocks."""
 
+from mmrl.models.base import Model as Model
 from mmrl.models.actors import (
     SquashedGaussianActor as SquashedGaussianActor,
     init_weights as init_weights,
@@ -8,6 +9,7 @@ from mmrl.models.critics import TwinQNetwork as TwinQNetwork
 
 __all__ = [
     "SquashedGaussianActor",
+    "Model",
     "TwinQNetwork",
     "WorldModel",
     "init_weights",
