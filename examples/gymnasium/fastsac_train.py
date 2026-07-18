@@ -16,7 +16,7 @@ import torch
 
 from mmrl.env_wrappers.gymnasium import GymnasiumEnvWrapper
 from mmrl.fastsac import FastSAC, FastSACConfig, FastSACRunner
-from mmrl.memories.off_policy import OffPolicyReplayMemory
+from mmrl.memories import OffPolicyReplayMemory
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,4 +80,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

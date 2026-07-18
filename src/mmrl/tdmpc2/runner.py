@@ -15,8 +15,8 @@ import torch
 
 from mmrl.logging import format_training_log
 from mmrl.runners.model_based import ModelBasedRunner
-from mmrl.tdmpc2.buffer import Buffer
-from mmrl.env_wrappers.mjlab import MJLabSingleEnvWrapper
+from mmrl.env_wrappers import EnvWrapper
+from mmrl.memories import EpisodeMemory
 
 if TYPE_CHECKING:
     from mmrl.tdmpc2.tdmpc2 import TDMPC2
@@ -32,9 +32,9 @@ class TDMPC2Runner(ModelBasedRunner):
     def __init__(
         self,
         cfg,
-        env: MJLabSingleEnvWrapper,
+        env: EnvWrapper,
         agent: TDMPC2,
-        buffer: Buffer,
+        buffer: EpisodeMemory,
         log_dir: Path,
     ):
         self.cfg = cfg

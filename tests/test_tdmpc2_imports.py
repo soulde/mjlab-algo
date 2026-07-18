@@ -1,5 +1,4 @@
-from mmrl.tdmpc2 import Buffer, TDMPC2, TDMPC2Config, make_tdmpc2_config
-from mmrl.tdmpc2.vecenv_wrapper import TDMPC2VecEnvWrapper
+from mmrl.tdmpc2 import TDMPC2, TDMPC2Config, make_tdmpc2_config
 
 
 def test_tdmpc2_public_api_imports():
@@ -10,6 +9,4 @@ def test_tdmpc2_public_api_imports():
     assert cfg.latent_dim == 128
     assert cfg.steps == 10
     assert cfg.buffer_size == 10
-    assert Buffer is not None
     assert TDMPC2 is not None
-    assert TDMPC2VecEnvWrapper is not None

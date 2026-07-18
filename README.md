@@ -64,7 +64,8 @@ from mmrl import TDMPC2, TDMPC2Config, TDMPC2Runner
 Algorithm-specific imports:
 
 ```python
-from mmrl.fastsac import FastSAC, FastSACReplayBuffer
+from mmrl.fastsac import FastSAC
+from mmrl.memories import OffPolicyReplayMemory
 from mmrl.fastsac import FastSACConfig, make_fastsac_config
 from mmrl.tdmpc2 import TDMPC2, TDMPC2Config, make_tdmpc2_config
 ```
@@ -88,12 +89,10 @@ src/mmrl/
     isaaclab.py
     mjlab.py
   fastsac/
-    buffer.py
     config.py
     fastsac.py
     networks.py
     runner.py
-    vecenv_wrapper.py
   memories/
     base.py
     episode.py
@@ -110,11 +109,9 @@ src/mmrl/
     off_policy.py
     on_policy.py
   tdmpc2/
-    buffer.py
     config.py
     runner.py
     tdmpc2.py
-    vecenv_wrapper.py
     world_model.py
 ```
 
@@ -134,9 +131,6 @@ examples/gymnasium/
 - FastSAC supports vectorized MJLab environments through its wrapper, but is
   intentionally single-process and lightweight.
 - Both algorithms flatten MJLab dict observations for their policy inputs.
-- Legacy imports such as `mmrl.fastsac.vecenv_wrapper` and
-  `mmrl.tdmpc2.buffer` are kept as compatibility shims while the common
-  namespaces mature.
 
 ## Config Compatibility
 

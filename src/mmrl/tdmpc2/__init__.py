@@ -1,6 +1,5 @@
 """TD-MPC2 algorithm package."""
 
-from mmrl.tdmpc2.buffer import Buffer as Buffer
 from mmrl.tdmpc2.config import (
     MODEL_SIZE as MODEL_SIZE,
     TASK_SET as TASK_SET,
@@ -9,7 +8,6 @@ from mmrl.tdmpc2.config import (
 )
 
 __all__ = [
-    "Buffer",
     "MODEL_SIZE",
     "TASK_SET",
     "TDMPC2",

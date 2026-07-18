@@ -1,18 +1,13 @@
 import torch
 from tensordict import TensorDict
 
-from mmrl.fastsac.buffer import FastSACBatch, FastSACReplayBuffer
 from mmrl.memories.off_policy import OffPolicyBatch, OffPolicyReplayMemory
 from mmrl.memories.on_policy import OnPolicyRolloutBatch, OnPolicyRolloutMemory
-from mmrl.tdmpc2.buffer import Buffer
 from mmrl.memories.episode import EpisodeMemory
 
 
-def test_fastsac_replay_buffer_aliases_off_policy_memory():
-    assert FastSACBatch is OffPolicyBatch
-    assert FastSACReplayBuffer is OffPolicyReplayMemory
-
-    memory = FastSACReplayBuffer(capacity=4, obs_dim=2, action_dim=1, device="cpu")
+def test_off_policy_memory_samples_transitions():
+    memory = OffPolicyReplayMemory(capacity=4, obs_dim=2, action_dim=1, device="cpu")
     memory.add(
         obs=torch.zeros(2, 2),
         action=torch.zeros(2, 1),
@@ -27,10 +22,6 @@ def test_fastsac_replay_buffer_aliases_off_policy_memory():
     assert batch.action.shape == (2, 1)
     assert batch.reward.shape == (2, 1)
     assert memory.size == 2
-
-
-def test_tdmpc2_buffer_aliases_episode_memory():
-    assert Buffer is EpisodeMemory
 
 
 def test_off_policy_memory_overwrites_oldest_ring_entries():

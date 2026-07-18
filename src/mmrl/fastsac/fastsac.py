@@ -5,13 +5,13 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 
-from mmrl.fastsac.buffer import FastSACBatch
 from mmrl.fastsac.config import FastSACConfig
 from mmrl.fastsac.networks import (
     SquashedGaussianActor,
     TwinQNetwork,
     init_weights,
 )
+from mmrl.memories import OffPolicyBatch
 
 
 class FastSAC:
@@ -66,7 +66,7 @@ class FastSAC:
             action, _ = self.actor.sample(obs)
         return action.cpu()
 
-    def update(self, batch: FastSACBatch) -> dict[str, float]:
+    def update(self, batch: OffPolicyBatch) -> dict[str, float]:
         with torch.no_grad():
             next_action, next_log_prob = self.actor.sample(batch.next_obs)
             target_q1, target_q2 = self.target_critic(batch.next_obs, next_action)

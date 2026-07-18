@@ -6,11 +6,11 @@ from time import time
 
 import torch
 
-from mmrl.fastsac.buffer import FastSACReplayBuffer
 from mmrl.fastsac.config import FastSACConfig
 from mmrl.fastsac.fastsac import FastSAC
-from mmrl.env_wrappers.mjlab import MJLabVectorEnvWrapper
+from mmrl.env_wrappers import EnvWrapper
 from mmrl.logging import format_training_log
+from mmrl.memories import OffPolicyReplayMemory
 from mmrl.runners.off_policy import OffPolicyRunner
 
 
@@ -20,9 +20,9 @@ class FastSACRunner(OffPolicyRunner):
     def __init__(
         self,
         cfg: FastSACConfig,
-        env: MJLabVectorEnvWrapper,
+        env: EnvWrapper,
         agent: FastSAC,
-        buffer: FastSACReplayBuffer,
+        buffer: OffPolicyReplayMemory,
         log_dir: str | Path,
     ):
         self.cfg = cfg

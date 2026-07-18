@@ -1,8 +1,9 @@
 import torch
 
 from mmrl import FastSACConfig, FastSACRunner, make_fastsac_config
-from mmrl.fastsac import FastSAC, FastSACReplayBuffer
+from mmrl.fastsac import FastSAC
 from mmrl.fastsac.networks import SquashedGaussianActor, TwinQNetwork
+from mmrl.memories import OffPolicyReplayMemory
 
 
 def test_fastsac_public_api_imports():
@@ -32,7 +33,7 @@ def test_fastsac_network_shapes():
 
 
 def test_fastsac_replay_buffer_samples_batches():
-    buffer = FastSACReplayBuffer(capacity=16, obs_dim=4, action_dim=2, device="cpu")
+    buffer = OffPolicyReplayMemory(capacity=16, obs_dim=4, action_dim=2, device="cpu")
 
     obs = torch.zeros(3, 4)
     action = torch.ones(3, 2)
@@ -60,7 +61,7 @@ def test_fastsac_updates_from_replay_batch():
         device="cpu",
     )
     agent = FastSAC(cfg)
-    buffer = FastSACReplayBuffer(capacity=16, obs_dim=4, action_dim=2, device="cpu")
+    buffer = OffPolicyReplayMemory(capacity=16, obs_dim=4, action_dim=2, device="cpu")
     buffer.add(
         obs=torch.randn(8, 4),
         action=torch.empty(8, 2).uniform_(-1.0, 1.0),

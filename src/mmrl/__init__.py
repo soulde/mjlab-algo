@@ -8,7 +8,6 @@ from mmrl.config import (
 from mmrl.fastsac import (
     FastSAC,
     FastSACConfig,
-    FastSACReplayBuffer,
     FastSACRunner,
     make_fastsac_config,
 )
@@ -17,7 +16,6 @@ from mmrl.tdmpc2.config import TDMPC2Config, make_tdmpc2_config
 __all__ = [
     "FastSAC",
     "FastSACConfig",
-    "FastSACReplayBuffer",
     "FastSACRunner",
     "TDMPC2",
     "TDMPC2Config",
