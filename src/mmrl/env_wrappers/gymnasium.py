@@ -1,5 +1,6 @@
 """Gymnasium environment wrapper."""
 
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
@@ -16,7 +17,7 @@ class GymnasiumEnvWrapper(EnvWrapper):
         self._device = torch.device(
             device or ("cuda:0" if torch.cuda.is_available() else "cpu")
         )
-        self._obs_dim = int(np.prod(env.observation_space.shape))
+        self._obs_dim = _space_flat_dim(env.observation_space)
         self._action_dim = int(np.prod(env.action_space.shape))
         self._action_low = torch.as_tensor(
             env.action_space.low, dtype=torch.float32
@@ -46,9 +47,15 @@ class GymnasiumEnvWrapper(EnvWrapper):
         return self.env.unwrapped
 
     def _obs_to_tensor(self, obs: Any) -> torch.Tensor:
-        return torch.as_tensor(obs, dtype=torch.float32, device=self.device).reshape(
-            1, -1
-        )
+        values = _flatten_observation(obs)
+        return torch.cat(
+            [
+                torch.as_tensor(
+                    value, dtype=torch.float32, device=self.device
+                ).reshape(-1)
+                for value in values
+            ]
+        ).reshape(1, -1)
 
     def rand_act(self) -> torch.Tensor:
         return 2.0 * torch.rand(1, self.action_dim) - 1.0
@@ -80,3 +87,30 @@ class GymnasiumEnvWrapper(EnvWrapper):
 
     def close(self) -> None:
         self.env.close()
+
+
+def _space_flat_dim(space: Any) -> int:
+    if hasattr(space, "spaces"):
+        spaces = (
+            space.spaces.values()
+            if isinstance(space.spaces, Mapping)
+            else space.spaces
+        )
+        return sum(_space_flat_dim(item) for item in spaces)
+    if space.shape is None:
+        raise TypeError(f"Observation space {space!r} has no fixed shape.")
+    return int(np.prod(space.shape))
+
+
+def _flatten_observation(obs: Any) -> list[Any]:
+    if isinstance(obs, Mapping):
+        values = []
+        for item in obs.values():
+            values.extend(_flatten_observation(item))
+        return values
+    if isinstance(obs, Sequence) and not isinstance(obs, (str, bytes, np.ndarray)):
+        values = []
+        for item in obs:
+            values.extend(_flatten_observation(item))
+        return values
+    return [obs]

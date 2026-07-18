@@ -16,6 +16,11 @@ class _FakeBox:
         return np.zeros(self.shape, dtype=np.float32)
 
 
+class _FakeDictSpace:
+    def __init__(self, spaces):
+        self.spaces = spaces
+
+
 class _FakeGymnasiumEnv:
     observation_space = _FakeBox(low=[-10.0, -10.0], high=[10.0, 10.0], shape=(2,))
     action_space = _FakeBox(low=[-2.0, 0.0], high=[2.0, 4.0], shape=(2,))
@@ -61,6 +66,27 @@ def test_gymnasium_wrapper_shapes_and_action_scaling():
 
     wrapped.close()
     assert env.closed
+
+
+def test_gymnasium_wrapper_flattens_dict_observations():
+    class DictEnv(_FakeGymnasiumEnv):
+        observation_space = _FakeDictSpace(
+            {
+                "position": _FakeBox([-1.0, -1.0], [1.0, 1.0], (2,)),
+                "velocity": _FakeBox([-1.0], [1.0], (1,)),
+            }
+        )
+
+        def reset(self):
+            return {
+                "position": np.asarray([1.0, 2.0]),
+                "velocity": np.asarray([3.0]),
+            }, {}
+
+    wrapped = GymnasiumEnvWrapper(DictEnv(), device="cpu")
+
+    assert wrapped.obs_dim == 3
+    assert wrapped.reset().tolist() == [[1.0, 2.0, 3.0]]
 
 
 class _FakeClassicGymEnv(_FakeGymnasiumEnv):
