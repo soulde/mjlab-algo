@@ -120,7 +120,8 @@ For already-preprocessed transitions, use `TensorAMPDataset(state,
 next_state)`. Environment-specific motion loaders can implement the same
 contract without being registered with mmrl.
 
-The wrapped environment or its `unwrapped` object must implement:
+For wrappers without observation-group support, the wrapped environment must
+implement:
 
 ```python
 def get_amp_observations() -> torch.Tensor:
@@ -136,12 +137,12 @@ terminal transition instead of pairing the previous state with a reset state.
 ### IsaacLab Observation Groups
 
 IsaacLab environments should return separate observation groups for policy,
-privileged critic input, and AMP motion features. Configure their mapping when
-constructing the wrapper:
+privileged critic input, and AMP motion features. The wrapper preserves those
+groups, while the runner config maps them to algorithm observation sets:
 
 ```python
-env = IsaacLabEnvWrapper(
-    env,
+env = IsaacLabEnvWrapper(env)
+cfg = AMPRunnerCfg(
     obs_groups={
         "actor": ("policy",),
         "critic": ("policy", "privileged"),
@@ -150,12 +151,12 @@ env = IsaacLabEnvWrapper(
 )
 ```
 
-`reset()` and `step()` return only the actor observation. PPO and AMP runners
-automatically obtain the cached critic observation through
-`get_critic_observations()`. AMP obtains the cached `amp` group separately.
-Missing critic groups fall back to actor observations; a missing configured AMP
-group raises an error. This prevents privileged or AMP features from leaking
-into the deployed actor policy.
+`reset()` and `step()` keep the full group mapping cached in the wrapper and
+return the conventional `policy` group through the common environment API.
+PPO and AMP runners select and concatenate their configured sets from the
+latest cache. Missing critic groups fall back to actor observations; a missing
+configured actor or AMP group raises an error. This prevents privileged or AMP
+features from leaking into the deployed actor policy.
 
 ## Logging
 
