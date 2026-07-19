@@ -133,6 +133,30 @@ must include `terminal_amp_observations`, containing either one row per
 environment or one row per completed environment. This preserves the real
 terminal transition instead of pairing the previous state with a reset state.
 
+### IsaacLab Observation Groups
+
+IsaacLab environments should return separate observation groups for policy,
+privileged critic input, and AMP motion features. Configure their mapping when
+constructing the wrapper:
+
+```python
+env = IsaacLabEnvWrapper(
+    env,
+    obs_groups={
+        "actor": ("policy",),
+        "critic": ("policy", "privileged"),
+        "amp": ("amp",),
+    },
+)
+```
+
+`reset()` and `step()` return only the actor observation. PPO and AMP runners
+automatically obtain the cached critic observation through
+`get_critic_observations()`. AMP obtains the cached `amp` group separately.
+Missing critic groups fall back to actor observations; a missing configured AMP
+group raises an error. This prevents privileged or AMP features from leaking
+into the deployed actor policy.
+
 ## Logging
 
 All runners always print a compact training block to the terminal. It includes
