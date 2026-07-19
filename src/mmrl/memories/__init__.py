@@ -1,5 +1,12 @@
 """Memory buffers used by runners and agents."""
 
+from mmrl.memories.amp import (
+    AMPExpertSource as AMPExpertSource,
+    AMPTransitionBatch as AMPTransitionBatch,
+    AMPTransitionMemory as AMPTransitionMemory,
+    TensorAMPDataset as TensorAMPDataset,
+)
+
 from mmrl.memories.base import Memory as Memory
 from mmrl.memories.off_policy import (
     OffPolicyBatch as OffPolicyBatch,
@@ -17,6 +24,9 @@ from mmrl.memories.storage import (
 
 __all__ = [
     "EpisodeMemory",
+    "AMPExpertSource",
+    "AMPTransitionBatch",
+    "AMPTransitionMemory",
     "Memory",
     "OffPolicyBatch",
     "OffPolicyReplayMemory",
@@ -25,6 +35,7 @@ __all__ = [
     "EpisodeListStorage",
     "TensorRingStorage",
     "TensorRolloutStorage",
+    "TensorAMPDataset",
 ]
 
 

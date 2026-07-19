@@ -1,5 +1,7 @@
 """Reusable model building blocks."""
 
+from mmrl.models.amp import AMPDiscriminator as AMPDiscriminator
+from mmrl.models.amp import RunningMeanStd as RunningMeanStd
 from mmrl.models.base import Model as Model
 from mmrl.models.actors import (
     GaussianActor as GaussianActor,
@@ -14,12 +16,14 @@ from mmrl.models.critics import (
 
 __all__ = [
     "GaussianActor",
+    "AMPDiscriminator",
     "Model",
     "QNetwork",
     "SquashedGaussianActor",
     "TwinQNetwork",
     "ValueNetwork",
     "WorldModel",
+    "RunningMeanStd",
     "init_weights",
 ]
 

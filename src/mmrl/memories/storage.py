@@ -12,10 +12,14 @@ class TensorRingStorage:
         self,
         capacity: int,
         specs: Mapping[str, tuple[tuple[int, ...], torch.dtype]],
+        device: str | torch.device = "cpu",
     ):
         self.capacity = int(capacity)
+        self.device = torch.device(device)
         self.fields = {
-            name: torch.empty((self.capacity, *shape), dtype=dtype)
+            name: torch.empty(
+                (self.capacity, *shape), dtype=dtype, device=self.device
+            )
             for name, (shape, dtype) in specs.items()
         }
         self._pos = 0
@@ -38,9 +42,11 @@ class TensorRingStorage:
             values = {name: value[start:] for name, value in values.items()}
             batch_size = self.capacity
 
-        indices = (torch.arange(batch_size) + self._pos) % self.capacity
+        indices = (
+            torch.arange(batch_size, device=self.device) + self._pos
+        ) % self.capacity
         for name, value in values.items():
-            self.fields[name][indices] = value
+            self.fields[name][indices] = value.to(self.device)
 
         self._pos = int((self._pos + batch_size) % self.capacity)
         self._size = min(self._size + batch_size, self.capacity)
@@ -50,7 +56,7 @@ class TensorRingStorage:
             raise ValueError(
                 f"Cannot sample {batch_size} transitions from {self._size}."
             )
-        return torch.randint(0, self._size, (batch_size,))
+        return torch.randint(0, self._size, (batch_size,), device=self.device)
 
     def gather(
         self,
