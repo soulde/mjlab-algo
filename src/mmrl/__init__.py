@@ -14,6 +14,7 @@ from mmrl.fastsac import (
     FastSACRunnerCfg,
     OffPolicyMemoryCfg,
 )
+from mmrl.logging import LoggerCfg, MetricLogger
 from mmrl.ppo import (
     ActorCritic,
     PPO,
@@ -39,6 +40,8 @@ __all__ = [
     "FastSACRunner",
     "FastSACRunnerCfg",
     "OffPolicyMemoryCfg",
+    "LoggerCfg",
+    "MetricLogger",
     "ActorCritic",
     "PPO",
     "PPOActorCriticCfg",

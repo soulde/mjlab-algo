@@ -1,4 +1,6 @@
-from mmrl.logging import format_training_log
+import pytest
+
+from mmrl.logging import LoggerCfg, MetricLogger, format_training_log
 
 
 def test_format_training_log_includes_ppo_style_debug_fields():
@@ -30,3 +32,20 @@ def test_format_training_log_includes_ppo_style_debug_fields():
     assert "Replay buffer:" in text
     assert "Log directory:" in text
     assert "ETA:" in text
+
+
+def test_metric_logger_rejects_unknown_backend(tmp_path):
+    with pytest.raises(ValueError, match="Unsupported logging backend"):
+        MetricLogger(tmp_path, LoggerCfg(backends=("unknown",)))
+
+
+def test_metric_logger_writes_tensorboard_events(tmp_path):
+    pytest.importorskip("tensorboard")
+    logger = MetricLogger(tmp_path, LoggerCfg(backends=("tensorboard",)))
+
+    logger.log({"loss": 1.25}, step=4, prefix="train")
+    logger.close()
+
+    event_files = list(tmp_path.glob("events.out.tfevents.*"))
+    assert event_files
+    assert event_files[0].stat().st_size > 0

@@ -19,6 +19,9 @@ dm-control = [
   "shimmy[dm-control]>=2.0",
   "scipy>=1.13",
 ]
+tensorboard = ["tensorboard>=2.14"]
+wandb = ["wandb>=0.17"]
+logging = ["tensorboard>=2.14", "wandb>=0.17"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

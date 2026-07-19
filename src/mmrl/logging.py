@@ -1,13 +1,107 @@
-"""Console logging helpers for MJLab algorithm runners."""
+"""Logging helpers shared by all algorithm runners."""
 
 from __future__ import annotations
 
 import datetime
+import importlib
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import torch
+
+
+@dataclass
+class LoggerCfg:
+    """Configuration for optional metric logging backends."""
+
+    backends: tuple[str, ...] = ()
+    wandb_project: str = "mmrl"
+    wandb_entity: str | None = None
+    wandb_group: str | None = None
+    run_name: str | None = None
+    wandb_silent: bool = False
+
+
+class MetricLogger:
+    """Fan scalar metrics out to configured experiment tracking backends."""
+
+    _SUPPORTED_BACKENDS = frozenset({"tensorboard", "wandb"})
+
+    def __init__(
+        self,
+        log_dir: str | Path,
+        cfg: LoggerCfg | None = None,
+        run_config: Mapping[str, Any] | None = None,
+    ) -> None:
+        self.log_dir = Path(log_dir)
+        self.cfg = cfg or LoggerCfg()
+        self._tensorboard = None
+        self._wandb_run = None
+
+        backends = tuple(dict.fromkeys(self.cfg.backends))
+        unsupported = set(backends) - self._SUPPORTED_BACKENDS
+        if unsupported:
+            names = ", ".join(sorted(unsupported))
+            raise ValueError(f"Unsupported logging backend(s): {names}")
+
+        if "tensorboard" in backends:
+            try:
+                summary_writer = importlib.import_module(
+                    "torch.utils.tensorboard"
+                ).SummaryWriter
+            except ImportError as exc:
+                raise ImportError(
+                    "TensorBoard logging requires `pip install mmrl[tensorboard]`."
+                ) from exc
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+            self._tensorboard = summary_writer(log_dir=str(self.log_dir))
+
+        if "wandb" in backends:
+            try:
+                wandb = importlib.import_module("wandb")
+            except ImportError as exc:
+                raise ImportError(
+                    "Weights & Biases logging requires `pip install mmrl[wandb]`."
+                ) from exc
+            self._wandb_run = wandb.init(
+                project=self.cfg.wandb_project,
+                entity=self.cfg.wandb_entity,
+                group=self.cfg.wandb_group,
+                name=self.cfg.run_name,
+                dir=str(self.log_dir),
+                config=dict(run_config or {}),
+                settings=wandb.Settings(silent=True)
+                if self.cfg.wandb_silent
+                else None,
+            )
+
+    def log(
+        self,
+        metrics: Mapping[str, Any],
+        step: int,
+        prefix: str | None = None,
+    ) -> None:
+        """Record scalar metrics at a global training step."""
+        values = {
+            f"{prefix}/{name}" if prefix else name: scalar(value)
+            for name, value in metrics.items()
+        }
+        if self._tensorboard is not None:
+            for name, value in values.items():
+                self._tensorboard.add_scalar(name, value, step)
+        if self._wandb_run is not None:
+            self._wandb_run.log(values, step=step)
+
+    def close(self) -> None:
+        """Flush and close all active logging backends."""
+        if self._tensorboard is not None:
+            self._tensorboard.close()
+            self._tensorboard = None
+        if self._wandb_run is not None:
+            self._wandb_run.finish()
+            self._wandb_run = None
 
 
 def scalar(value: Any) -> float:
