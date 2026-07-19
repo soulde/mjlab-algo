@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, field
 
+from mmrl.logging import LoggerCfg
+
 
 @dataclass
 class PPOActorCriticCfg:
@@ -47,3 +49,4 @@ class PPORunnerCfg:
     actor_critic: PPOActorCriticCfg = field(default_factory=PPOActorCriticCfg)
     algorithm: PPOAlgorithmCfg = field(default_factory=PPOAlgorithmCfg)
     memory: PPOMemoryCfg = field(default_factory=PPOMemoryCfg)
+    logger: LoggerCfg = field(default_factory=LoggerCfg)

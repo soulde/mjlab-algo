@@ -8,7 +8,7 @@ import torch
 
 from mmrl.config import config_to_dict, get_config_value
 from mmrl.env_wrappers import EnvWrapper
-from mmrl.logging import format_training_log
+from mmrl.logging import MetricLogger, format_training_log
 from mmrl.memories import OnPolicyRolloutMemory
 from mmrl.ppo.actor_critic import ActorCritic
 from mmrl.ppo.ppo import PPO
@@ -61,6 +61,11 @@ class PPORunner(OnPolicyRunner):
         )
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.logger = MetricLogger(
+            self.log_dir,
+            get_config_value(train_cfg, "logger"),
+            config_to_dict(train_cfg),
+        )
         self.current_iteration = 0
         self._episode_rewards = torch.zeros(env.num_envs)
         self._episode_lengths = torch.zeros(env.num_envs)
@@ -115,6 +120,7 @@ class PPORunner(OnPolicyRunner):
                     self.log_dir / "models" / f"model_{self.current_iteration}.pt"
                 )
         self.save(self.log_dir / "models" / "final.pt")
+        self.logger.close()
 
     @torch.no_grad()
     def _collect_rollout(self, obs: torch.Tensor) -> torch.Tensor:
@@ -163,6 +169,21 @@ class PPORunner(OnPolicyRunner):
             * self.env.num_envs
         )
         iteration_time = collection_time + learning_time
+        steps_per_second = (
+            self.memory.storage.num_steps
+            * self.env.num_envs
+            / max(iteration_time, 1e-6)
+        )
+        mean_reward = (
+            sum(self._reward_history) / len(self._reward_history)
+            if self._reward_history
+            else None
+        )
+        mean_episode_length = (
+            sum(self._length_history) / len(self._length_history)
+            if self._length_history
+            else None
+        )
         print(
             format_training_log(
                 title=(
@@ -170,27 +191,15 @@ class PPORunner(OnPolicyRunner):
                     f"{get_config_value(self.cfg, 'max_iterations')}"
                 ),
                 total_steps=steps,
-                steps_per_second=(
-                    self.memory.storage.num_steps
-                    * self.env.num_envs
-                    / max(iteration_time, 1e-6)
-                ),
+                steps_per_second=steps_per_second,
                 collection_time=collection_time,
                 learning_time=learning_time,
                 losses={
                     "value": metrics["value_loss"],
                     "surrogate": metrics["surrogate_loss"],
                 },
-                mean_reward=(
-                    sum(self._reward_history) / len(self._reward_history)
-                    if self._reward_history
-                    else None
-                ),
-                mean_episode_length=(
-                    sum(self._length_history) / len(self._length_history)
-                    if self._length_history
-                    else None
-                ),
+                mean_reward=mean_reward,
+                mean_episode_length=mean_episode_length,
                 extras={
                     "Entropy": metrics["entropy"],
                     "KL": metrics["kl"],
@@ -209,6 +218,17 @@ class PPORunner(OnPolicyRunner):
                 log_dir=self.log_dir,
             )
         )
+        metric_values = {
+            **metrics,
+            "steps_per_second": steps_per_second,
+            "collection_time": collection_time,
+            "learning_time": learning_time,
+        }
+        if mean_reward is not None:
+            metric_values["mean_episode_reward"] = mean_reward
+        if mean_episode_length is not None:
+            metric_values["mean_episode_length"] = mean_episode_length
+        self.logger.log(metric_values, step=steps, prefix="train")
 
     def get_inference_policy(self, device: str | torch.device | None = None):
         if device is not None:

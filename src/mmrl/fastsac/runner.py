@@ -6,10 +6,10 @@ from time import time
 
 import torch
 
-from mmrl.config import get_config_value
+from mmrl.config import config_to_dict, get_config_value
 from mmrl.fastsac.fastsac import FastSAC
 from mmrl.env_wrappers import EnvWrapper
-from mmrl.logging import format_training_log
+from mmrl.logging import MetricLogger, format_training_log
 from mmrl.memories import OffPolicyReplayMemory
 from mmrl.runners.off_policy import OffPolicyRunner
 
@@ -44,6 +44,11 @@ class FastSACRunner(OffPolicyRunner):
         )
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.logger = MetricLogger(
+            self.log_dir,
+            get_config_value(train_cfg, "logger"),
+            config_to_dict(train_cfg),
+        )
         self._start_time = time()
         self._rewbuffer: deque[float] = deque(maxlen=100)
         self._lenbuffer: deque[float] = deque(maxlen=100)
@@ -175,6 +180,18 @@ class FastSACRunner(OffPolicyRunner):
                         log_dir=self.log_dir,
                     )
                 )
+                metric_values = {
+                    **last_metrics,
+                    "replay_size": self.buffer.size,
+                    "steps_per_second": sps,
+                    "collection_time": interval_collection_time,
+                    "learning_time": interval_learning_time,
+                }
+                if mean_reward is not None:
+                    metric_values["mean_episode_reward"] = mean_reward
+                if mean_episode_length is not None:
+                    metric_values["mean_episode_length"] = mean_episode_length
+                self.logger.log(metric_values, step=step, prefix="train")
                 interval_collection_time = 0.0
                 interval_learning_time = 0.0
                 interval_start_step = step
@@ -188,3 +205,4 @@ class FastSACRunner(OffPolicyRunner):
                 self.save(self.log_dir / "models" / f"model_{step}.pt")
 
         self.save(self.log_dir / "models" / "final.pt")
+        self.logger.close()

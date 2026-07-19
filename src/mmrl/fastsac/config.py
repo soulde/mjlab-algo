@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, field
 
+from mmrl.logging import LoggerCfg
+
 
 @dataclass
 class FastSACActorCfg:
@@ -53,3 +55,4 @@ class FastSACRunnerCfg:
     actor: FastSACActorCfg = field(default_factory=FastSACActorCfg)
     critic: FastSACCriticCfg = field(default_factory=FastSACCriticCfg)
     memory: OffPolicyMemoryCfg = field(default_factory=OffPolicyMemoryCfg)
+    logger: LoggerCfg = field(default_factory=LoggerCfg)
