@@ -1,7 +1,7 @@
 # mmrl
 
 Environment-agnostic reinforcement learning algorithms for MJLab, IsaacLab,
-Gym, and Gymnasium style environments.
+and Gymnasium environments.
 
 `mmrl` is a core algorithm package. Install it into the same Python
 environment as your simulator or environment framework, then write thin
@@ -30,7 +30,7 @@ register tasks, algorithms, or components in this package.
 ## Requirements
 
 - Python version compatible with your target environment framework.
-- A working MJLab, IsaacLab, Gym, or Gymnasium environment.
+- A working MJLab, IsaacLab, or Gymnasium environment.
 - `uv` for local editable installation and command execution.
 
 This package intentionally does not vendor environment frameworks; install the
@@ -62,8 +62,8 @@ uv pip install --python .venv/bin/python -e './mmrl[dm-control]' \
 
 ## Entry Points
 
-`mmrl` intentionally provides no training CLI. MJLab, IsaacLab, Gym, and
-Gymnasium packages construct their own environment and own their `train.py` and
+`mmrl` intentionally provides no training CLI. MJLab, IsaacLab, and Gymnasium
+packages construct their own environment and own their `train.py` and
 `play.py`. See `examples/gymnasium/` for the integration template.
 
 ## Python API
@@ -279,7 +279,8 @@ mode for headless playback or recording.
 
 ## Notes
 
-- TD-MPC2 uses single-environment training.
+- TD-MPC2 supports vector environments and stores asynchronously completed
+  trajectories as separate episodes.
 - TD-MPC2 runs without `torch.compile` by default to avoid PyTorch 2.9
   Inductor/TF32 compatibility issues.
 - FastSAC supports vectorized MJLab environments through its wrapper, but is
