@@ -135,6 +135,12 @@ class GymnasiumEnvWrapper(EnvWrapper):
     def close(self) -> None:
         self.env.close()
 
+    def get_amp_observations(self) -> torch.Tensor:
+        raise NotImplementedError(
+            "GymnasiumEnvWrapper does not support AMP observation groups. "
+            "Use an IsaacLab or MJLab environment wrapper for AMP training."
+        )
+
 
 def _space_flat_dim(space: Any) -> int:
     if hasattr(space, "spaces"):

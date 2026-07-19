@@ -125,14 +125,17 @@ layout, applies motion weights, interpolates frames, and optionally preloads
 transitions. These fields are required in `env.cfg.amp`; alternative aliases
 are not accepted.
 
-For wrappers without observation-group support, the wrapped environment must
-implement:
+Custom wrappers without observation-group support may implement:
 
 ```python
 def get_amp_observations() -> torch.Tensor:
     # Shape: (num_envs, amp_observation_dim)
     ...
 ```
+
+The built-in Gymnasium wrapper does not support AMP and raises an explicit
+error when AMP observations are requested. Use IsaacLab or MJLab observation
+groups for AMP training.
 
 If `step()` automatically resets completed environments, its info dictionary
 must include `terminal_amp_observations`, containing either one row per
