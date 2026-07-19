@@ -17,6 +17,7 @@ class ActorCritic(Model):
         cfg,
         obs_dim: int,
         action_dim: int,
+        critic_obs_dim: int | None = None,
     ):
         super().__init__()
         self.actor = GaussianActor(
@@ -27,8 +28,11 @@ class ActorCritic(Model):
             cfg.init_noise_std,
             cfg.noise_std_type,
         )
+        self.critic_obs_dim = critic_obs_dim or obs_dim
         self.critic = ValueNetwork(
-            obs_dim, tuple(cfg.critic_hidden_dims), cfg.activation
+            self.critic_obs_dim,
+            tuple(cfg.critic_hidden_dims),
+            cfg.activation,
         )
 
     @property
@@ -39,20 +43,30 @@ class ActorCritic(Model):
         return self.actor.distribution(obs)
 
     def act(
-        self, obs: torch.Tensor
+        self,
+        obs: torch.Tensor,
+        critic_obs: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         distribution = self.distribution(obs)
         action = distribution.sample()
         log_prob = distribution.log_prob(action).sum(dim=-1, keepdim=True)
-        return action, log_prob, self.critic(obs)
+        value_obs = critic_obs if critic_obs is not None else obs
+        return action, log_prob, self.critic(value_obs)
 
     def evaluate_actions(
-        self, obs: torch.Tensor, action: torch.Tensor
+        self,
+        obs: torch.Tensor,
+        action: torch.Tensor,
+        critic_obs: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         distribution = self.distribution(obs)
         log_prob = distribution.log_prob(action).sum(dim=-1, keepdim=True)
         entropy = distribution.entropy().sum(dim=-1, keepdim=True)
-        return log_prob, entropy, self.critic(obs)
+        return (
+            log_prob,
+            entropy,
+            self.critic(critic_obs if critic_obs is not None else obs),
+        )
 
     def act_inference(self, obs: torch.Tensor) -> torch.Tensor:
         return self.actor(obs)

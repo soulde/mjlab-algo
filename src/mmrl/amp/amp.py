@@ -110,7 +110,7 @@ class AMP(PPO):
                         unbiased=False
                     ).clamp_min(1e-8)
                 log_prob, entropy, value = self.policy.evaluate_actions(
-                    batch.obs, batch.action
+                    batch.obs, batch.action, batch.critic_obs
                 )
                 log_ratio = log_prob - batch.log_prob
                 ratio = log_ratio.exp()

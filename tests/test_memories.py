@@ -68,6 +68,7 @@ def test_on_policy_rollout_memory_uses_shared_storage():
         obs_shape=(3,),
         action_shape=(1,),
         device="cpu",
+        critic_obs_shape=(5,),
     )
     for step in range(2):
         memory.add(
@@ -77,6 +78,7 @@ def test_on_policy_rollout_memory_uses_shared_storage():
             done=torch.zeros(2, dtype=torch.bool),
             log_prob=torch.zeros(2),
             value=torch.zeros(2),
+            critic_obs=torch.full((2, 5), float(step + 10)),
         )
 
     memory.compute_returns(torch.zeros(2), normalize_advantage=False)
@@ -87,6 +89,7 @@ def test_on_policy_rollout_memory_uses_shared_storage():
     assert len(batches) == 2
     assert all(isinstance(batch, OnPolicyRolloutBatch) for batch in batches)
     assert all(batch.obs.shape == (2, 3) for batch in batches)
+    assert all(batch.critic_obs.shape == (2, 5) for batch in batches)
     assert torch.all(memory.storage["ret"] > 0)
     memory.clear()
     assert memory.size == 0

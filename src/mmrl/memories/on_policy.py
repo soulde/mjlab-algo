@@ -11,6 +11,7 @@ from mmrl.memories.storage import TensorRolloutStorage
 @dataclass(frozen=True)
 class OnPolicyRolloutBatch:
     obs: torch.Tensor
+    critic_obs: torch.Tensor
     action: torch.Tensor
     reward: torch.Tensor
     done: torch.Tensor
@@ -30,12 +31,14 @@ class OnPolicyRolloutMemory(Memory):
         obs_shape: tuple[int, ...],
         action_shape: tuple[int, ...],
         device: str | torch.device,
+        critic_obs_shape: tuple[int, ...] | None = None,
     ):
         self.storage = TensorRolloutStorage(
             num_steps,
             num_envs,
             {
                 "obs": (obs_shape, torch.float32),
+                "critic_obs": (critic_obs_shape or obs_shape, torch.float32),
                 "action": (action_shape, torch.float32),
                 "reward": ((1,), torch.float32),
                 "done": ((1,), torch.bool),
@@ -63,10 +66,12 @@ class OnPolicyRolloutMemory(Memory):
         done: torch.Tensor,
         log_prob: torch.Tensor,
         value: torch.Tensor,
+        critic_obs: torch.Tensor | None = None,
     ) -> None:
         self.storage.add(
             {
                 "obs": obs,
+                "critic_obs": critic_obs if critic_obs is not None else obs,
                 "action": action,
                 "reward": reward.reshape(-1, 1),
                 "done": done.reshape(-1, 1),
