@@ -46,6 +46,12 @@ class PPORunnerCfg:
     max_iterations: int = 1_500
     save_interval: int = 50
     log_interval: int = 1
+    obs_groups: dict[str, tuple[str, ...]] = field(
+        default_factory=lambda: {
+            "actor": ("policy",),
+            "critic": ("critic",),
+        }
+    )
     actor_critic: PPOActorCriticCfg = field(default_factory=PPOActorCriticCfg)
     algorithm: PPOAlgorithmCfg = field(default_factory=PPOAlgorithmCfg)
     memory: PPOMemoryCfg = field(default_factory=PPOMemoryCfg)

@@ -41,6 +41,14 @@ class _AMPEnv(EnvWrapper):
     def get_critic_observations(self):
         return self._critic_obs
 
+    def select_observation_groups(self, groups):
+        values = {
+            "policy": torch.full((2, 4), float(self.steps)),
+            "critic": self._critic_obs,
+            "amp": self._amp_obs,
+        }
+        return torch.cat([values[group] for group in groups], dim=-1)
+
     def reset(self):
         self._amp_obs.zero_()
         self._critic_obs.zero_()

@@ -42,11 +42,16 @@ class PPORunner(OnPolicyRunner):
                 f"Rollout size {rollout_size} must be divisible by "
                 f"num_mini_batches {num_mini_batches}."
             )
+        initial_obs = env.reset().to(self.device)
+        actor_obs = self._get_observation_set("actor", initial_obs)
+        critic_obs = self._get_observation_set(
+            "critic", actor_obs, allow_fallback=True
+        )
         self.policy = ActorCritic(
             get_config_value(train_cfg, "actor_critic"),
-            obs_dim=env.obs_dim,
+            obs_dim=actor_obs.shape[-1],
             action_dim=env.action_dim,
-            critic_obs_dim=getattr(env, "critic_obs_dim", env.obs_dim),
+            critic_obs_dim=critic_obs.shape[-1],
         ).to(self.device)
         self.algorithm = PPO(
             get_config_value(train_cfg, "algorithm"),
@@ -56,10 +61,10 @@ class PPORunner(OnPolicyRunner):
         self.memory = OnPolicyRolloutMemory(
             num_steps=get_config_value(train_cfg, "memory.num_steps_per_env"),
             num_envs=env.num_envs,
-            obs_shape=(env.obs_dim,),
+            obs_shape=(actor_obs.shape[-1],),
             action_shape=(env.action_dim,),
             device=self.device,
-            critic_obs_shape=(getattr(env, "critic_obs_dim", env.obs_dim),),
+            critic_obs_shape=(critic_obs.shape[-1],),
         )
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -88,8 +93,11 @@ class PPORunner(OnPolicyRunner):
                 )
 
     def learn(self) -> None:
-        obs = self.env.reset().to(self.device)
-        critic_obs = self._get_critic_observations(obs)
+        initial_obs = self.env.reset().to(self.device)
+        obs = self._get_observation_set("actor", initial_obs)
+        critic_obs = self._get_observation_set(
+            "critic", obs, allow_fallback=True
+        )
         start_time = time()
         max_iterations = get_config_value(self.cfg, "max_iterations")
         log_interval = get_config_value(self.cfg, "log_interval")
@@ -134,8 +142,12 @@ class PPORunner(OnPolicyRunner):
         for _ in range(num_steps):
             action, log_prob, value = self.algorithm.act(obs, critic_obs)
             next_obs, reward, done, info = self.env.step(action)
-            next_obs = next_obs.to(self.device)
-            next_critic_obs = self._get_critic_observations(next_obs)
+            next_obs = self._get_observation_set(
+                "actor", next_obs.to(self.device)
+            )
+            next_critic_obs = self._get_observation_set(
+                "critic", next_obs, allow_fallback=True
+            )
             reward = reward.to(self.device, dtype=torch.float32)
             done = done.to(self.device, dtype=torch.bool)
             time_outs = info.get("time_outs") if isinstance(info, dict) else None
@@ -157,11 +169,22 @@ class PPORunner(OnPolicyRunner):
             critic_obs = next_critic_obs
         return obs, critic_obs
 
-    def _get_critic_observations(self, actor_obs: torch.Tensor) -> torch.Tensor:
-        getter = getattr(self.env, "get_critic_observations", None)
-        if getter is None:
-            return actor_obs
-        return getter().to(self.device)
+    def _get_observation_set(
+        self,
+        set_name: str,
+        fallback: torch.Tensor,
+        allow_fallback: bool = False,
+    ) -> torch.Tensor:
+        selector = getattr(self.env, "select_observation_groups", None)
+        if selector is None:
+            return fallback
+        groups = get_config_value(self.cfg, f"obs_groups.{set_name}")
+        try:
+            return selector(groups).to(self.device)
+        except KeyError:
+            if allow_fallback:
+                return fallback
+            raise
 
     def _track_episodes(self, reward: torch.Tensor, done: torch.Tensor) -> None:
         self._episode_rewards += reward.detach().cpu()

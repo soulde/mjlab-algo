@@ -33,7 +33,12 @@ class AMPRunner(OnPolicyRunner):
             device or get_config_value(train_cfg, "device") or env.device
         )
         self._validate_components()
-        amp_observation = self._get_amp_observations()
+        initial_obs = env.reset().to(self.device)
+        actor_obs = self._get_observation_set("actor", initial_obs)
+        critic_obs = self._get_observation_set(
+            "critic", actor_obs, allow_fallback=True
+        )
+        amp_observation = self._get_observation_set("amp", actor_obs)
         amp_observation_dim = int(amp_observation.shape[-1])
         if expert_source.observation_dim != amp_observation_dim:
             raise ValueError(
@@ -54,9 +59,9 @@ class AMPRunner(OnPolicyRunner):
             )
         self.policy = ActorCritic(
             get_config_value(train_cfg, "actor_critic"),
-            obs_dim=env.obs_dim,
+            obs_dim=actor_obs.shape[-1],
             action_dim=env.action_dim,
-            critic_obs_dim=getattr(env, "critic_obs_dim", env.obs_dim),
+            critic_obs_dim=critic_obs.shape[-1],
         ).to(self.device)
         discriminator_cfg = get_config_value(train_cfg, "discriminator")
         self.discriminator = AMPDiscriminator(
@@ -74,10 +79,10 @@ class AMPRunner(OnPolicyRunner):
         self.memory = OnPolicyRolloutMemory(
             num_steps=get_config_value(train_cfg, "memory.num_steps_per_env"),
             num_envs=env.num_envs,
-            obs_shape=(env.obs_dim,),
+            obs_shape=(actor_obs.shape[-1],),
             action_shape=(env.action_dim,),
             device=self.device,
-            critic_obs_shape=(getattr(env, "critic_obs_dim", env.obs_dim),),
+            critic_obs_shape=(critic_obs.shape[-1],),
         )
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -107,13 +112,13 @@ class AMPRunner(OnPolicyRunner):
                     f"{expected!r}."
                 )
 
-    def _get_amp_observations(self) -> torch.Tensor:
-        return self.env.get_amp_observations().to(self.device)
-
     def learn(self) -> None:
-        obs = self.env.reset().to(self.device)
-        critic_obs = self._get_critic_observations(obs)
-        amp_obs = self._get_amp_observations()
+        initial_obs = self.env.reset().to(self.device)
+        obs = self._get_observation_set("actor", initial_obs)
+        critic_obs = self._get_observation_set(
+            "critic", obs, allow_fallback=True
+        )
+        amp_obs = self._get_observation_set("amp", obs)
         start_time = time()
         max_iterations = get_config_value(self.cfg, "max_iterations")
         log_interval = get_config_value(self.cfg, "log_interval")
@@ -162,10 +167,14 @@ class AMPRunner(OnPolicyRunner):
         for _ in range(num_steps):
             action, log_prob, value = self.algorithm.act(obs, critic_obs)
             next_obs, task_reward, done, info = self.env.step(action)
-            next_obs = next_obs.to(self.device)
-            next_critic_obs = self._get_critic_observations(next_obs)
+            next_obs = self._get_observation_set(
+                "actor", next_obs.to(self.device)
+            )
+            next_critic_obs = self._get_observation_set(
+                "critic", next_obs, allow_fallback=True
+            )
             done = done.to(self.device, dtype=torch.bool)
-            next_amp_obs = self._get_amp_observations()
+            next_amp_obs = self._get_observation_set("amp", next_obs)
             replay_next_amp_obs = self._terminal_amp_observations(
                 next_amp_obs, done, info
             )
@@ -201,11 +210,24 @@ class AMPRunner(OnPolicyRunner):
             amp_obs = next_amp_obs
         return obs, critic_obs, amp_obs
 
-    def _get_critic_observations(self, actor_obs: torch.Tensor) -> torch.Tensor:
-        getter = getattr(self.env, "get_critic_observations", None)
-        if getter is None:
-            return actor_obs
-        return getter().to(self.device)
+    def _get_observation_set(
+        self,
+        set_name: str,
+        fallback: torch.Tensor,
+        allow_fallback: bool = False,
+    ) -> torch.Tensor:
+        selector = getattr(self.env, "select_observation_groups", None)
+        if selector is None:
+            if set_name == "amp":
+                return self.env.get_amp_observations().to(self.device)
+            return fallback
+        groups = get_config_value(self.cfg, f"obs_groups.{set_name}")
+        try:
+            return selector(groups).to(self.device)
+        except KeyError:
+            if allow_fallback:
+                return fallback
+            raise
 
     def _terminal_amp_observations(
         self, next_amp_obs: torch.Tensor, done: torch.Tensor, info

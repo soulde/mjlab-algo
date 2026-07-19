@@ -36,6 +36,13 @@ class AMPRunnerCfg:
     max_iterations: int = 1_500
     save_interval: int = 50
     log_interval: int = 1
+    obs_groups: dict[str, tuple[str, ...]] = field(
+        default_factory=lambda: {
+            "actor": ("policy",),
+            "critic": ("critic",),
+            "amp": ("amp",),
+        }
+    )
     actor_critic: PPOActorCriticCfg = field(default_factory=PPOActorCriticCfg)
     algorithm: AMPAlgorithmCfg = field(default_factory=AMPAlgorithmCfg)
     discriminator: AMPDiscriminatorCfg = field(

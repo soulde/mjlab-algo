@@ -37,18 +37,22 @@ class _AsymmetricPPOEnv(_PPOEnv):
     def __init__(self):
         super().__init__()
         self.critic_obs = torch.zeros(self.num_envs, self.critic_obs_dim)
+        self.actor_obs = torch.zeros(self.num_envs, self.obs_dim)
 
     def reset(self):
         self.critic_obs.zero_()
-        return super().reset()
+        self.actor_obs = super().reset()
+        return self.actor_obs
 
     def step(self, action):
         obs, reward, done, info = super().step(action)
+        self.actor_obs = obs
         self.critic_obs.fill_(float(self.steps))
         return obs, reward, done, info
 
-    def get_critic_observations(self):
-        return self.critic_obs
+    def select_observation_groups(self, groups):
+        values = {"policy": self.actor_obs, "critic": self.critic_obs}
+        return torch.cat([values[group] for group in groups], dim=-1)
 
 
 def _runner_cfg() -> PPORunnerCfg:
