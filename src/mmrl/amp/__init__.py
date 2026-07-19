@@ -6,10 +6,12 @@ from mmrl.amp.config import (
     AMPMemoryCfg as AMPMemoryCfg,
     AMPRunnerCfg as AMPRunnerCfg,
 )
+from mmrl.amp.motion_loader import AMPLoader as AMPLoader
 
 __all__ = [
     "AMP",
     "AMPAlgorithmCfg",
+    "AMPLoader",
     "AMPDiscriminatorCfg",
     "AMPMemoryCfg",
     "AMPRunner",
