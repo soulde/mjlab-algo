@@ -56,6 +56,14 @@ uv pip install --python .venv/bin/python -e './mmrl[dm-control]' \
   --no-build-isolation
 ```
 
+Install experiment tracking backends as needed:
+
+```sh
+uv pip install --python .venv/bin/python -e './mmrl[tensorboard]'
+uv pip install --python .venv/bin/python -e './mmrl[wandb]'
+# Or install both with './mmrl[logging]'.
+```
+
 ## Entry Points
 
 `mmrl` intentionally provides no training CLI. MJLab, IsaacLab, Gym, and
@@ -87,6 +95,36 @@ from mmrl.env_wrappers import GymnasiumEnvWrapper
 from mmrl.env_wrappers import MJLabSingleEnvWrapper, MJLabVectorEnvWrapper
 from mmrl.memories import EpisodeMemory, OffPolicyReplayMemory
 ```
+
+## Logging
+
+All runners always print a compact training block to the terminal. It includes
+progress, throughput, collection and learning time, losses, recent episode
+reward and length, elapsed time, ETA, and algorithm-specific values such as
+entropy, KL, alpha, or replay size.
+
+TensorBoard and Weights & Biases use the same scalar metrics and global step.
+They are disabled by default and configured through the nested Python runner
+config:
+
+```python
+from mmrl import LoggerCfg, PPORunnerCfg
+
+cfg = PPORunnerCfg(
+    logger=LoggerCfg(
+        backends=("tensorboard", "wandb"),
+        wandb_project="dog-run",
+        wandb_group="ppo",
+        run_name="seed-1",
+    )
+)
+```
+
+TensorBoard event files and checkpoints are written below the runner's
+`log_dir`. Start TensorBoard with `tensorboard --logdir <log-root>`. W&B uses
+the same directory for its local run files. Enabling a backend without its
+optional dependency raises an installation error instead of silently disabling
+logging.
 
 ## Package Layout
 
@@ -197,6 +235,9 @@ runner:
     ...
   memory:
     class_name: ...
+    ...
+  logger:
+    backends: ...
     ...
 ```
 

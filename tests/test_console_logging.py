@@ -41,7 +41,7 @@ def test_metric_logger_rejects_unknown_backend(tmp_path):
 
 def test_metric_logger_writes_tensorboard_events(tmp_path):
     pytest.importorskip("tensorboard")
-    logger = MetricLogger(tmp_path, LoggerCfg(backends=("tensorboard",)))
+    logger = MetricLogger(tmp_path, {"backends": ("tensorboard",)})
 
     logger.log({"loss": 1.25}, step=4, prefix="train")
     logger.close()

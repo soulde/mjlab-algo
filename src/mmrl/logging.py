@@ -32,7 +32,7 @@ class MetricLogger:
     def __init__(
         self,
         log_dir: str | Path,
-        cfg: LoggerCfg | None = None,
+        cfg: LoggerCfg | Mapping[str, Any] | Any | None = None,
         run_config: Mapping[str, Any] | None = None,
     ) -> None:
         self.log_dir = Path(log_dir)
@@ -40,11 +40,13 @@ class MetricLogger:
         self._tensorboard = None
         self._wandb_run = None
 
-        backends = tuple(dict.fromkeys(self.cfg.backends))
+        backends = tuple(dict.fromkeys(_logger_cfg_value(self.cfg, "backends", ())))
         unsupported = set(backends) - self._SUPPORTED_BACKENDS
         if unsupported:
             names = ", ".join(sorted(unsupported))
             raise ValueError(f"Unsupported logging backend(s): {names}")
+        if backends:
+            self.log_dir.mkdir(parents=True, exist_ok=True)
 
         if "tensorboard" in backends:
             try:
@@ -55,7 +57,6 @@ class MetricLogger:
                 raise ImportError(
                     "TensorBoard logging requires `pip install mmrl[tensorboard]`."
                 ) from exc
-            self.log_dir.mkdir(parents=True, exist_ok=True)
             self._tensorboard = summary_writer(log_dir=str(self.log_dir))
 
         if "wandb" in backends:
@@ -66,14 +67,14 @@ class MetricLogger:
                     "Weights & Biases logging requires `pip install mmrl[wandb]`."
                 ) from exc
             self._wandb_run = wandb.init(
-                project=self.cfg.wandb_project,
-                entity=self.cfg.wandb_entity,
-                group=self.cfg.wandb_group,
-                name=self.cfg.run_name,
+                project=_logger_cfg_value(self.cfg, "wandb_project", "mmrl"),
+                entity=_logger_cfg_value(self.cfg, "wandb_entity"),
+                group=_logger_cfg_value(self.cfg, "wandb_group"),
+                name=_logger_cfg_value(self.cfg, "run_name"),
                 dir=str(self.log_dir),
                 config=dict(run_config or {}),
                 settings=wandb.Settings(silent=True)
-                if self.cfg.wandb_silent
+                if _logger_cfg_value(self.cfg, "wandb_silent", False)
                 else None,
             )
 
@@ -102,6 +103,12 @@ class MetricLogger:
         if self._wandb_run is not None:
             self._wandb_run.finish()
             self._wandb_run = None
+
+
+def _logger_cfg_value(cfg: Any, name: str, default: Any = None) -> Any:
+    if isinstance(cfg, Mapping):
+        return cfg.get(name, default)
+    return getattr(cfg, name, default)
 
 
 def scalar(value: Any) -> float:
