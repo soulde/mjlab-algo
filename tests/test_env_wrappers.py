@@ -163,25 +163,40 @@ def test_gymnasium_wrapper_supports_vector_environments():
 class _FakeMJLabEnv:
     num_envs = 2
     device = "cpu"
+    observation_space = object()
+    action_space = object()
 
     class _Unwrapped:
+        num_envs = 2
+        device = "cpu"
         action_manager = type("ActionManager", (), {"total_action_dim": 2})()
+        max_episode_length = 100
+        episode_length_buf = torch.zeros(2, dtype=torch.long)
+        observation_manager = type(
+            "ObservationManager",
+            (),
+            {"compute": lambda self: {"actor": torch.full((2, 2), 9.0)}},
+        )()
+
+        def seed(self, seed):
+            return seed
 
     def __init__(self):
         self.unwrapped = self._Unwrapped()
+        self.unwrapped.cfg = type("Cfg", (), {"is_finite_horizon": False})()
         self.last_action = None
         self.closed = False
 
     def reset(self):
         return {
-            "policy": torch.tensor([[1.0, 2.0], [3.0, 4.0]]),
-            "extra": np.asarray([[5.0], [6.0]], dtype=np.float32),
+            "actor": torch.tensor([[1.0, 2.0], [3.0, 4.0]]),
+            "critic": np.asarray([[5.0], [6.0]], dtype=np.float32),
         }, {}
 
     def step(self, action):
         self.last_action = action
         return (
-            {"policy": torch.zeros(2, 2), "extra": torch.ones(2, 1)},
+            {"actor": torch.zeros(2, 2), "critic": torch.ones(2, 1)},
             torch.tensor([1.0, 2.0]),
             torch.tensor([True, False]),
             torch.tensor([False, True]),
@@ -194,26 +209,53 @@ class _FakeMJLabEnv:
 
 def test_mjlab_vector_wrapper_preserves_parallel_batch():
     env = _FakeMJLabEnv()
-    wrapped = MJLabVectorEnvWrapper(env)
+    wrapped = MJLabVectorEnvWrapper(env, clip_actions=0.5)
 
     assert wrapped.num_envs == 2
-    assert wrapped.obs_dim == 3
+    assert wrapped.obs_dim == 2
     assert wrapped.action_dim == 2
-    assert wrapped.reset().tolist() == [[1.0, 2.0, 5.0], [3.0, 4.0, 6.0]]
+    assert wrapped.max_episode_length == 100
+    assert wrapped.reset().tolist() == [[1.0, 2.0], [3.0, 4.0]]
+    assert wrapped.select_observation_groups(("actor", "critic")).tolist() == [
+        [1.0, 2.0, 5.0],
+        [3.0, 4.0, 6.0],
+    ]
     assert wrapped.rand_act().shape == (2, 2)
+    assert wrapped.seed(7) == 7
+    assert wrapped.get_observations().tolist() == [[9.0, 9.0], [9.0, 9.0]]
 
-    obs, reward, done, info = wrapped.step(torch.zeros(2, 2))
+    obs, reward, done, info = wrapped.step(torch.ones(2, 2))
 
-    assert obs.shape == (2, 3)
+    assert obs.shape == (2, 2)
     assert reward.tolist() == [1.0, 2.0]
     assert done.tolist() == [True, True]
     assert info["terminated"].tolist() == [True, False]
     assert info["truncated"].tolist() == [False, True]
     assert info["time_outs"].tolist() == [False, True]
+    assert env.last_action.tolist() == [[0.5, 0.5], [0.5, 0.5]]
     assert env.last_action.device == wrapped.device
 
     wrapped.close()
     assert env.closed
+
+
+def test_mjlab_wrapper_requires_actor_observation_group():
+    env = _FakeMJLabEnv()
+    env.reset = lambda: ({"policy": torch.zeros(2, 2)}, {})
+
+    with np.testing.assert_raises_regex(KeyError, "actor"):
+        MJLabVectorEnvWrapper(env).reset()
+
+
+def test_mjlab_finite_horizon_does_not_report_timeouts():
+    env = _FakeMJLabEnv()
+    env.unwrapped.cfg.is_finite_horizon = True
+
+    _obs, _reward, _done, info = MJLabVectorEnvWrapper(env).step(
+        torch.zeros(2, 2)
+    )
+
+    assert "time_outs" not in info
 
 
 class _FakeIsaacLabEnv:
