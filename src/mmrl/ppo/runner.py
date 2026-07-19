@@ -216,6 +216,7 @@ class PPORunner(OnPolicyRunner):
                     )
                 ),
                 log_dir=self.log_dir,
+                color=get_config_value(self.cfg, "logger.color", True),
             )
         )
         metric_values = {

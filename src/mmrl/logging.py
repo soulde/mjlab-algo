@@ -17,6 +17,7 @@ class LoggerCfg:
     """Configuration for optional metric logging backends."""
 
     backends: tuple[str, ...] = ()
+    color: bool = True
     wandb_project: str = "mmrl"
     wandb_entity: str | None = None
     wandb_group: str | None = None
@@ -140,32 +141,41 @@ def format_training_log(
     elapsed_time: float,
     eta_seconds: float,
     log_dir: str | Path | None = None,
+    color: bool = True,
     width: int = 80,
     pad: int = 40,
 ) -> str:
     """Build a PPO-style console log block."""
-    log_string = f"{'#' * width}\n"
-    log_string += f"\033[1m{f' {title} '.center(width)}\033[0m \n\n"
+    def paint(text: str, code: str) -> str:
+        return f"\033[{code}m{text}\033[0m" if color else text
+
+    def row(label: str, value: str, code: str) -> str:
+        return f"{label:>{pad}} {paint(value, code)}\n"
+
+    log_string = f"{paint('#' * width, '90')}\n"
+    log_string += f"{paint(f' {title} '.center(width), '1;36')} \n\n"
     if log_dir is not None:
-        log_string += f"{'Log directory:':>{pad}} {log_dir}\n"
+        log_string += row("Log directory:", str(log_dir), "36")
     log_string += (
-        f"{'Total steps:':>{pad}} {total_steps} \n"
-        f"{'Steps per second:':>{pad}} {steps_per_second:.0f} \n"
-        f"{'Collection time:':>{pad}} {collection_time:.3f}s \n"
-        f"{'Learning time:':>{pad}} {learning_time:.3f}s \n"
+        row("Total steps:", str(total_steps), "1;37")
+        + row("Steps per second:", f"{steps_per_second:.0f}", "1;32")
+        + row("Collection time:", f"{collection_time:.3f}s", "32")
+        + row("Learning time:", f"{learning_time:.3f}s", "32")
     )
     for name, value in (losses or {}).items():
-        log_string += f"{f'Mean {name} loss:':>{pad}} {scalar(value):.4f}\n"
+        log_string += row(f"Mean {name} loss:", f"{scalar(value):.4f}", "33")
     if mean_reward is not None:
-        log_string += f"{'Mean reward:':>{pad}} {mean_reward:.2f}\n"
+        log_string += row("Mean reward:", f"{mean_reward:.2f}", "1;35")
     if mean_episode_length is not None:
-        log_string += f"{'Mean episode length:':>{pad}} {mean_episode_length:.2f}\n"
+        log_string += row(
+            "Mean episode length:", f"{mean_episode_length:.2f}", "35"
+        )
     for name, value in (extras or {}).items():
-        log_string += f"{f'{name}:':>{pad}} {scalar(value):.4f}\n"
+        log_string += row(f"{name}:", f"{scalar(value):.4f}", "34")
     log_string += (
-        f"{'-' * width}\n"
-        f"{'Iteration time:':>{pad}} {iteration_time:.2f}s\n"
-        f"{'Time elapsed:':>{pad}} {format_duration(elapsed_time)}\n"
-        f"{'ETA:':>{pad}} {format_duration(eta_seconds)}\n"
+        f"{paint('-' * width, '90')}\n"
+        + row("Iteration time:", f"{iteration_time:.2f}s", "36")
+        + row("Time elapsed:", format_duration(elapsed_time), "36")
+        + row("ETA:", format_duration(eta_seconds), "1;36")
     )
     return log_string

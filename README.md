@@ -105,12 +105,16 @@ from mmrl import LoggerCfg, PPORunnerCfg
 cfg = PPORunnerCfg(
     logger=LoggerCfg(
         backends=("tensorboard", "wandb"),
+        color=True,
         wandb_project="dog-run",
         wandb_group="ppo",
         run_name="seed-1",
     )
 )
 ```
+
+Set `color=False` for white/plain terminal output, for example when redirecting
+training logs to a file.
 
 TensorBoard event files and checkpoints are written below the runner's
 `log_dir`. Start TensorBoard with `tensorboard --logdir <log-root>`. W&B uses

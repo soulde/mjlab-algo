@@ -178,6 +178,7 @@ class FastSACRunner(OffPolicyRunner):
                         elapsed_time=elapsed,
                         eta_seconds=eta,
                         log_dir=self.log_dir,
+                        color=get_config_value(self.cfg, "logger.color", True),
                     )
                 )
                 metric_values = {

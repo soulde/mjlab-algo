@@ -32,6 +32,24 @@ def test_format_training_log_includes_ppo_style_debug_fields():
     assert "Replay buffer:" in text
     assert "Log directory:" in text
     assert "ETA:" in text
+    assert "\033[" in text
+
+
+def test_format_training_log_can_disable_terminal_colors():
+    text = format_training_log(
+        title="PPO iteration 1/1",
+        total_steps=24,
+        steps_per_second=100.0,
+        collection_time=0.1,
+        learning_time=0.2,
+        iteration_time=0.3,
+        elapsed_time=0.3,
+        eta_seconds=0.0,
+        color=False,
+    )
+
+    assert "PPO iteration 1/1" in text
+    assert "\033[" not in text
 
 
 def test_metric_logger_rejects_unknown_backend(tmp_path):
