@@ -1,4 +1,5 @@
 import torch
+from types import SimpleNamespace
 
 from mmrl.env_wrappers import EnvWrapper
 from mmrl.tdmpc2 import (
@@ -8,11 +9,35 @@ from mmrl.tdmpc2 import (
     TDMPC2RunnerCfg,
 )
 from mmrl.tdmpc2.runner import TDMPC2Runner
+from mmrl.tdmpc2.tdmpc2 import TDMPC2
 
 
 class _FakeEnv:
     def rand_act(self):
         return torch.zeros(2)
+
+
+def test_agent_batches_actions_with_independent_planning_history():
+    agent = TDMPC2.__new__(TDMPC2)
+    torch.nn.Module.__init__(agent)
+    agent.cfg = SimpleNamespace(mpc=True, horizon=2, action_dim=1)
+    agent.device = torch.device("cpu")
+    agent._prev_mean = torch.zeros(2, 1)
+
+    def fake_plan(obs, t0, eval_mode, task):
+        if t0:
+            agent._prev_mean.zero_()
+        action = agent._prev_mean[0, 0] + obs[0, 0]
+        agent._prev_mean.fill_(action)
+        return action.view(1)
+
+    agent._plan_val = fake_plan
+
+    first = agent.act(torch.tensor([[1.0], [10.0]]), t0=torch.tensor([True, True]))
+    second = agent.act(torch.tensor([[2.0], [20.0]]), t0=torch.tensor([False, True]))
+
+    assert first.tolist() == [[1.0], [10.0]]
+    assert second.tolist() == [[3.0], [20.0]]
 
 
 def test_to_td_moves_placeholder_and_step_tensors_to_obs_device():

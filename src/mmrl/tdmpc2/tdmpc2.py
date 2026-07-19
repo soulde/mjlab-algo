@@ -96,6 +96,7 @@ class TDMPC2(torch.nn.Module):
         self._prev_mean = torch.nn.Buffer(
             torch.zeros(self.cfg.horizon, self.cfg.action_dim, device=self.device)
         )
+        self._prev_mean_batch: torch.Tensor | None = None
 
     @property
     def plan(self):
@@ -137,7 +138,7 @@ class TDMPC2(torch.nn.Module):
     def act(
         self,
         obs: torch.Tensor,
-        t0: bool = False,
+        t0: bool | torch.Tensor = False,
         eval_mode: bool = False,
         task=None,
     ) -> torch.Tensor:
@@ -152,16 +153,50 @@ class TDMPC2(torch.nn.Module):
         Returns:
             Action to take in the environment.
         """
-        obs = obs.to(self.device, non_blocking=True).unsqueeze(0)
+        single = obs.ndim == 1
+        obs = obs.to(self.device, non_blocking=True)
+        if single:
+            obs = obs.unsqueeze(0)
         if task is not None:
             task = torch.tensor([task], device=self.device)
         if self.cfg.mpc:
-            return self.plan(obs, t0=t0, eval_mode=eval_mode, task=task).cpu()
+            t0_batch = torch.as_tensor(t0, dtype=torch.bool, device=self.device)
+            if t0_batch.ndim == 0:
+                t0_batch = t0_batch.expand(obs.shape[0])
+            if t0_batch.shape != (obs.shape[0],):
+                raise ValueError("t0 must be a bool or have shape (num_envs,).")
+            expected_shape = (
+                obs.shape[0],
+                self.cfg.horizon,
+                self.cfg.action_dim,
+            )
+            previous_means = getattr(self, "_prev_mean_batch", None)
+            if (
+                previous_means is None
+                or previous_means.shape != expected_shape
+            ):
+                self._prev_mean_batch = torch.zeros(
+                    expected_shape, device=self.device
+                )
+            actions = []
+            for index in range(obs.shape[0]):
+                self._prev_mean.copy_(self._prev_mean_batch[index])
+                action = self.plan(
+                    obs[index : index + 1],
+                    t0=bool(t0_batch[index]),
+                    eval_mode=eval_mode,
+                    task=task,
+                )
+                self._prev_mean_batch[index].copy_(self._prev_mean)
+                actions.append(action)
+            result = torch.stack(actions).cpu()
+            return result[0] if single else result
         z = self.model.encode(obs, task)
         action, info = self.model.pi(z, task)
         if eval_mode:
             action = info["mean"]
-        return action[0].cpu()
+        action = action.cpu()
+        return action[0] if single else action
 
     @torch.no_grad()
     def _estimate_value(
