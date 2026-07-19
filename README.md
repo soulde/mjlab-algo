@@ -163,6 +163,28 @@ latest cache. Missing critic groups fall back to actor observations; a missing
 configured actor or AMP group raises an error. This prevents privileged or AMP
 features from leaking into the deployed actor policy.
 
+### MJLab Observation Groups
+
+MJLab uses `actor` and `critic` as its conventional observation group names.
+Environment-owned Python configs should map those names explicitly instead of
+relying on the IsaacLab-oriented defaults:
+
+```python
+env = MJLabVectorEnvWrapper(env, clip_actions=1.0)
+cfg = PPORunnerCfg(
+    obs_groups={
+        "actor": ("actor",),
+        "critic": ("critic",),
+    },
+)
+runner = PPORunner(env, cfg, log_dir)
+```
+
+The wrapper preserves every MJLab observation group, returns `actor` through
+the common environment API, clips actions only when `clip_actions` is set, and
+adds `time_outs` for infinite-horizon tasks. Missing configured groups raise an
+error; no `policy` to `actor` compatibility alias is provided.
+
 ## Logging
 
 All runners always print a compact training block to the terminal. It includes
