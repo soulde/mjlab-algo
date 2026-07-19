@@ -55,7 +55,7 @@ class MetricLogger:
                 ).SummaryWriter
             except ImportError as exc:
                 raise ImportError(
-                    "TensorBoard logging requires `pip install mmrl[tensorboard]`."
+                    "The required `tensorboard` package is not installed."
                 ) from exc
             self._tensorboard = summary_writer(log_dir=str(self.log_dir))
 
@@ -64,7 +64,7 @@ class MetricLogger:
                 wandb = importlib.import_module("wandb")
             except ImportError as exc:
                 raise ImportError(
-                    "Weights & Biases logging requires `pip install mmrl[wandb]`."
+                    "The required `wandb` package is not installed."
                 ) from exc
             self._wandb_run = wandb.init(
                 project=_logger_cfg_value(self.cfg, "wandb_project", "mmrl"),

@@ -56,14 +56,6 @@ uv pip install --python .venv/bin/python -e './mmrl[dm-control]' \
   --no-build-isolation
 ```
 
-Install experiment tracking backends as needed:
-
-```sh
-uv pip install --python .venv/bin/python -e './mmrl[tensorboard]'
-uv pip install --python .venv/bin/python -e './mmrl[wandb]'
-# Or install both with './mmrl[logging]'.
-```
-
 ## Entry Points
 
 `mmrl` intentionally provides no training CLI. MJLab, IsaacLab, Gym, and
@@ -122,9 +114,8 @@ cfg = PPORunnerCfg(
 
 TensorBoard event files and checkpoints are written below the runner's
 `log_dir`. Start TensorBoard with `tensorboard --logdir <log-root>`. W&B uses
-the same directory for its local run files. Enabling a backend without its
-optional dependency raises an installation error instead of silently disabling
-logging.
+the same directory for its local run files. TensorBoard and W&B are installed
+as core dependencies, but remain inactive until listed in `logger.backends`.
 
 ## Package Layout
 
