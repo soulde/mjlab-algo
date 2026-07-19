@@ -149,6 +149,7 @@ class _FakeIsaacLabEnv:
         return {
             "policy": torch.tensor([[1.0, 2.0], [3.0, 4.0]]),
             "privileged": torch.tensor([[5.0], [6.0]]),
+            "amp": torch.tensor([[7.0, 8.0], [9.0, 10.0]]),
         }, {}
 
     def step(self, action):
@@ -156,6 +157,7 @@ class _FakeIsaacLabEnv:
         obs = {
             "policy": torch.zeros(2, 2),
             "privileged": torch.ones(2, 1),
+            "amp": torch.full((2, 2), 2.0),
         }
         reward = torch.tensor([1.0, 2.0])
         terminated = torch.tensor([False, True])
@@ -168,7 +170,11 @@ class _FakeIsaacLabEnv:
 
 def test_isaaclab_wrapper_vectorized_dict_observations_and_action_scaling():
     env = _FakeIsaacLabEnv()
-    wrapped = IsaacLabEnvWrapper(env, device="cpu")
+    wrapped = IsaacLabEnvWrapper(
+        env,
+        device="cpu",
+        obs_groups={"critic": ("policy", "privileged")},
+    )
 
     obs = wrapped.reset()
     next_obs, reward, done, info = wrapped.step(
@@ -176,11 +182,18 @@ def test_isaaclab_wrapper_vectorized_dict_observations_and_action_scaling():
     )
 
     assert wrapped.num_envs == 2
-    assert wrapped.obs_dim == 3
+    assert wrapped.obs_dim == 2
+    assert wrapped.critic_obs_dim == 3
+    assert wrapped.amp_observation_dim == 2
     assert wrapped.action_dim == 2
-    assert obs.tolist() == [[1.0, 2.0, 5.0], [3.0, 4.0, 6.0]]
+    assert obs.tolist() == [[1.0, 2.0], [3.0, 4.0]]
+    assert wrapped.get_critic_observations().tolist() == [
+        [0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0],
+    ]
+    assert wrapped.get_amp_observations().tolist() == [[2.0, 2.0], [2.0, 2.0]]
     assert env.last_action.tolist() == [[-2.0, 4.0], [2.0, -4.0]]
-    assert next_obs.tolist() == [[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]]
+    assert next_obs.tolist() == [[0.0, 0.0], [0.0, 0.0]]
     assert reward.tolist() == [1.0, 2.0]
     assert done.tolist() == [True, True]
     assert info == {"isaac": 1}
@@ -196,3 +209,17 @@ def test_wrapper_forwards_native_amp_observations():
 
     assert wrapped.amp_observation_dim == 3
     assert wrapped.get_amp_observations().tolist() == [[1.0, 2.0, 3.0]]
+
+
+def test_isaaclab_wrapper_requires_configured_amp_group():
+    env = _FakeIsaacLabEnv()
+    wrapped = IsaacLabEnvWrapper(
+        env, device="cpu", obs_groups={"amp": ("motion",)}
+    )
+
+    try:
+        wrapped.get_amp_observations()
+    except KeyError as error:
+        assert "motion" in str(error)
+    else:
+        raise AssertionError("IsaacLab wrapper accepted a missing AMP group")

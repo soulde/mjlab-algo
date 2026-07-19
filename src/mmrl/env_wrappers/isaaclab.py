@@ -12,7 +12,12 @@ from mmrl.env_wrappers.base import EnvWrapper
 class IsaacLabEnvWrapper(EnvWrapper):
     """Adapt IsaacLab-style vectorized torch environments."""
 
-    def __init__(self, env: Any, device: str | torch.device | None = None):
+    def __init__(
+        self,
+        env: Any,
+        device: str | torch.device | None = None,
+        obs_groups: Mapping[str, Sequence[str]] | None = None,
+    ):
         self.env = env
         self._device = torch.device(
             device
@@ -22,6 +27,15 @@ class IsaacLabEnvWrapper(EnvWrapper):
         self._num_envs = int(getattr(env, "num_envs", 1))
         self._action_dim = self._infer_action_dim()
         self._obs_dim: int | None = None
+        self._critic_obs: torch.Tensor | None = None
+        self._amp_obs: torch.Tensor | None = None
+        self._observations_initialized = False
+        self.obs_groups = {
+            "actor": ("policy",),
+            "critic": ("critic",),
+            "amp": ("amp",),
+            **{name: tuple(groups) for name, groups in (obs_groups or {}).items()},
+        }
         self._action_low, self._action_high = self._infer_action_bounds()
 
     @property
@@ -92,6 +106,58 @@ class IsaacLabEnvWrapper(EnvWrapper):
             tensor = tensor.reshape(self.num_envs, -1)
         return tensor
 
+    def _select_observation_groups(
+        self, observations: Mapping[str, Any], set_name: str
+    ) -> torch.Tensor | None:
+        values = [
+            observations[group]
+            for group in self.obs_groups[set_name]
+            if group in observations
+        ]
+        if not values:
+            return None
+        return torch.cat([self._obs_to_tensor(value) for value in values], dim=-1)
+
+    def _process_observations(self, observations: Any) -> torch.Tensor:
+        self._observations_initialized = True
+        if not isinstance(observations, Mapping):
+            actor_obs = self._obs_to_tensor(observations)
+            self._critic_obs = actor_obs
+            self._amp_obs = None
+            self._obs_dim = int(actor_obs.shape[-1])
+            return actor_obs
+
+        actor_obs = self._select_observation_groups(observations, "actor")
+        if actor_obs is None:
+            actor_obs = self._obs_to_tensor(observations)
+        critic_obs = self._select_observation_groups(observations, "critic")
+        self._critic_obs = critic_obs if critic_obs is not None else actor_obs
+        self._amp_obs = self._select_observation_groups(observations, "amp")
+        self._obs_dim = int(actor_obs.shape[-1])
+        return actor_obs
+
+    def get_critic_observations(self) -> torch.Tensor:
+        """Return the latest critic observation set, falling back to actor."""
+        if not self._observations_initialized:
+            self.reset()
+        assert self._critic_obs is not None
+        return self._critic_obs
+
+    @property
+    def critic_obs_dim(self) -> int:
+        return int(self.get_critic_observations().shape[-1])
+
+    def get_amp_observations(self) -> torch.Tensor:
+        """Return the latest IsaacLab AMP observation group."""
+        if not self._observations_initialized:
+            self.reset()
+        if self._amp_obs is None:
+            groups = ", ".join(self.obs_groups["amp"])
+            raise KeyError(
+                f"IsaacLab observations are missing AMP group(s): {groups}."
+            )
+        return self._amp_obs
+
     def _scale_action(self, action: torch.Tensor) -> torch.Tensor:
         action = action.to(self.device, dtype=torch.float32).reshape(
             self.num_envs, self.action_dim
@@ -109,7 +175,7 @@ class IsaacLabEnvWrapper(EnvWrapper):
     def reset(self) -> torch.Tensor:
         result = self.env.reset()
         obs = result[0] if isinstance(result, tuple) else result
-        return self._obs_to_tensor(obs)
+        return self._process_observations(obs)
 
     def step(
         self, action: torch.Tensor
@@ -125,7 +191,7 @@ class IsaacLabEnvWrapper(EnvWrapper):
         else:
             raise ValueError(f"Unsupported IsaacLab step result length: {len(result)}")
         return (
-            self._obs_to_tensor(obs),
+            self._process_observations(obs),
             torch.as_tensor(reward, dtype=torch.float32, device=self.device).view(-1),
             torch.as_tensor(done, dtype=torch.bool, device=self.device).view(-1),
             dict(extras),
@@ -133,4 +199,3 @@ class IsaacLabEnvWrapper(EnvWrapper):
 
     def close(self) -> None:
         self.env.close()
-
