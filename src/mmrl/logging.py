@@ -10,6 +10,10 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from colorama import Fore, Style, init as colorama_init
+
+
+colorama_init()
 
 
 @dataclass
@@ -146,36 +150,50 @@ def format_training_log(
     pad: int = 40,
 ) -> str:
     """Build a PPO-style console log block."""
-    def paint(text: str, code: str) -> str:
-        return f"\033[{code}m{text}\033[0m" if color else text
+    def paint(text: str, style: str) -> str:
+        return f"{style}{text}{Style.RESET_ALL}" if color else text
 
-    def row(label: str, value: str, code: str) -> str:
-        return f"{label:>{pad}} {paint(value, code)}\n"
+    def row(label: str, value: str, style: str) -> str:
+        return f"{label:>{pad}} {paint(value, style)}\n"
 
-    log_string = f"{paint('#' * width, '90')}\n"
-    log_string += f"{paint(f' {title} '.center(width), '1;36')} \n\n"
-    if log_dir is not None:
-        log_string += row("Log directory:", str(log_dir), "36")
+    log_string = f"{paint('#' * width, Fore.LIGHTBLACK_EX)}\n"
     log_string += (
-        row("Total steps:", str(total_steps), "1;37")
-        + row("Steps per second:", f"{steps_per_second:.0f}", "1;32")
-        + row("Collection time:", f"{collection_time:.3f}s", "32")
-        + row("Learning time:", f"{learning_time:.3f}s", "32")
+        f"{paint(f' {title} '.center(width), Style.BRIGHT + Fore.CYAN)} \n\n"
+    )
+    if log_dir is not None:
+        log_string += row("Log directory:", str(log_dir), Fore.CYAN)
+    log_string += (
+        row("Total steps:", str(total_steps), Style.BRIGHT + Fore.WHITE)
+        + row(
+            "Steps per second:",
+            f"{steps_per_second:.0f}",
+            Style.BRIGHT + Fore.GREEN,
+        )
+        + row("Collection time:", f"{collection_time:.3f}s", Fore.GREEN)
+        + row("Learning time:", f"{learning_time:.3f}s", Fore.GREEN)
     )
     for name, value in (losses or {}).items():
-        log_string += row(f"Mean {name} loss:", f"{scalar(value):.4f}", "33")
+        log_string += row(
+            f"Mean {name} loss:", f"{scalar(value):.4f}", Fore.YELLOW
+        )
     if mean_reward is not None:
-        log_string += row("Mean reward:", f"{mean_reward:.2f}", "1;35")
+        log_string += row(
+            "Mean reward:", f"{mean_reward:.2f}", Style.BRIGHT + Fore.MAGENTA
+        )
     if mean_episode_length is not None:
         log_string += row(
-            "Mean episode length:", f"{mean_episode_length:.2f}", "35"
+            "Mean episode length:", f"{mean_episode_length:.2f}", Fore.MAGENTA
         )
     for name, value in (extras or {}).items():
-        log_string += row(f"{name}:", f"{scalar(value):.4f}", "34")
+        log_string += row(f"{name}:", f"{scalar(value):.4f}", Fore.BLUE)
     log_string += (
-        f"{paint('-' * width, '90')}\n"
-        + row("Iteration time:", f"{iteration_time:.2f}s", "36")
-        + row("Time elapsed:", format_duration(elapsed_time), "36")
-        + row("ETA:", format_duration(eta_seconds), "1;36")
+        f"{paint('-' * width, Fore.LIGHTBLACK_EX)}\n"
+        + row("Iteration time:", f"{iteration_time:.2f}s", Fore.CYAN)
+        + row("Time elapsed:", format_duration(elapsed_time), Fore.CYAN)
+        + row(
+            "ETA:",
+            format_duration(eta_seconds),
+            Style.BRIGHT + Fore.CYAN,
+        )
     )
     return log_string

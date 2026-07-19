@@ -9,6 +9,7 @@ description = "Environment-agnostic reinforcement learning algorithm package."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+  "colorama>=0.4.6",
   "tensorboard>=2.14",
   "tensordict>=0.6.0",
   "wandb>=0.17",
