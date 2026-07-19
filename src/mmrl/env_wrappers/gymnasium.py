@@ -11,20 +11,26 @@ from mmrl.env_wrappers.base import EnvWrapper
 
 
 class GymnasiumEnvWrapper(EnvWrapper):
-    """Adapt a single Gymnasium continuous-control environment."""
+    """Adapt Gymnasium scalar and vector continuous-control environments."""
 
     def __init__(self, env: Any, device: str | torch.device | None = None):
         self.env = env
         self._device = torch.device(
             device or ("cuda:0" if torch.cuda.is_available() else "cpu")
         )
-        self._obs_dim = _space_flat_dim(env.observation_space)
-        self._action_dim = int(np.prod(env.action_space.shape))
+        self._num_envs = int(getattr(env, "num_envs", 1))
+        self._is_vector_env = hasattr(env, "num_envs")
+        observation_space = getattr(
+            env, "single_observation_space", env.observation_space
+        )
+        self._action_space = getattr(env, "single_action_space", env.action_space)
+        self._obs_dim = _space_flat_dim(observation_space)
+        self._action_dim = int(np.prod(self._action_space.shape))
         self._action_low = torch.as_tensor(
-            env.action_space.low, dtype=torch.float32
+            self._action_space.low, dtype=torch.float32
         ).reshape(1, -1)
         self._action_high = torch.as_tensor(
-            env.action_space.high, dtype=torch.float32
+            self._action_space.high, dtype=torch.float32
         ).reshape(1, -1)
 
     @classmethod
@@ -51,7 +57,7 @@ class GymnasiumEnvWrapper(EnvWrapper):
 
     @property
     def num_envs(self) -> int:
-        return 1
+        return self._num_envs
 
     @property
     def obs_dim(self) -> int:
@@ -75,21 +81,29 @@ class GymnasiumEnvWrapper(EnvWrapper):
             [
                 torch.as_tensor(
                     value, dtype=torch.float32, device=self.device
-                ).reshape(-1)
+                ).reshape(self.num_envs, -1)
                 for value in values
-            ]
-        ).reshape(1, -1)
+            ],
+            dim=-1,
+        )
 
     def rand_act(self) -> torch.Tensor:
-        return 2.0 * torch.rand(1, self.action_dim) - 1.0
+        return 2.0 * torch.rand(
+            self.num_envs, self.action_dim, device=self.device
+        ) - 1.0
 
     def _scale_action(self, action: torch.Tensor) -> np.ndarray:
-        action = action.detach().cpu().to(dtype=torch.float32).reshape(1, -1)
+        action = action.detach().cpu().to(dtype=torch.float32).reshape(
+            self.num_envs, -1
+        )
         action = action.clamp(-1.0, 1.0)
         scaled = self._action_low + 0.5 * (action + 1.0) * (
             self._action_high - self._action_low
         )
-        return scaled.numpy().reshape(self.env.action_space.shape)
+        shape = self._action_space.shape
+        if self._is_vector_env:
+            return scaled.numpy().reshape(self.num_envs, *shape)
+        return scaled.numpy().reshape(shape)
 
     def reset(self) -> torch.Tensor:
         obs, _info = self.env.reset()
@@ -100,15 +114,21 @@ class GymnasiumEnvWrapper(EnvWrapper):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         action_np = self._scale_action(action)
         obs, reward, terminated, truncated, info = self.env.step(action_np)
-        done = terminated or truncated
+        terminated_tensor = torch.as_tensor(
+            terminated, dtype=torch.bool, device=self.device
+        ).view(-1)
+        truncated_tensor = torch.as_tensor(
+            truncated, dtype=torch.bool, device=self.device
+        ).view(-1)
+        done = terminated_tensor | truncated_tensor
         info = dict(info)
-        info.setdefault("terminated", bool(terminated))
-        info.setdefault("truncated", bool(truncated))
-        info.setdefault("time_outs", torch.tensor([truncated], dtype=torch.bool))
+        info.setdefault("terminated", terminated_tensor)
+        info.setdefault("truncated", truncated_tensor)
+        info.setdefault("time_outs", truncated_tensor)
         return (
             self._obs_to_tensor(obs),
-            torch.tensor([reward], dtype=torch.float32),
-            torch.tensor([done], dtype=torch.bool),
+            torch.as_tensor(reward, dtype=torch.float32, device=self.device).view(-1),
+            done,
             info,
         )
 

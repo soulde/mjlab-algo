@@ -60,8 +60,8 @@ def test_gymnasium_wrapper_shapes_and_action_scaling():
     assert reward.tolist() == [1.5]
     assert done.tolist() == [True]
     assert info["x"] == 1
-    assert info["terminated"] is False
-    assert info["truncated"] is True
+    assert info["terminated"].tolist() == [False]
+    assert info["truncated"].tolist() == [True]
     assert info["time_outs"].tolist() == [True]
 
     random_action = wrapped.rand_act()
@@ -107,6 +107,57 @@ def test_gymnasium_make_delegates_to_gymnasium():
         wrapped = GymnasiumEnvWrapper.make("Pendulum-v1", device="cpu")
 
     assert wrapped.obs_dim == 2
+
+
+class _FakeGymnasiumVectorEnv(_FakeGymnasiumEnv):
+    num_envs = 2
+    single_observation_space = _FakeGymnasiumEnv.observation_space
+    single_action_space = _FakeGymnasiumEnv.action_space
+    observation_space = _FakeBox(
+        low=[[-10.0, -10.0], [-10.0, -10.0]],
+        high=[[10.0, 10.0], [10.0, 10.0]],
+        shape=(2, 2),
+    )
+    action_space = _FakeBox(
+        low=[[-2.0, 0.0], [-2.0, 0.0]],
+        high=[[2.0, 4.0], [2.0, 4.0]],
+        shape=(2, 2),
+    )
+
+    def reset(self):
+        return np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32), {}
+
+    def step(self, action):
+        self.last_action = action
+        return (
+            np.zeros((2, 2), dtype=np.float32),
+            np.asarray([1.0, 2.0], dtype=np.float32),
+            np.asarray([True, False]),
+            np.asarray([False, True]),
+            {"success": np.asarray([True, False])},
+        )
+
+
+def test_gymnasium_wrapper_supports_vector_environments():
+    env = _FakeGymnasiumVectorEnv()
+    wrapped = GymnasiumEnvWrapper(env, device="cpu")
+
+    assert wrapped.num_envs == 2
+    assert wrapped.obs_dim == 2
+    assert wrapped.reset().tolist() == [[1.0, 2.0], [3.0, 4.0]]
+    assert wrapped.rand_act().shape == (2, 2)
+
+    obs, reward, done, info = wrapped.step(
+        torch.tensor([[-1.0, 1.0], [1.0, -1.0]])
+    )
+
+    np.testing.assert_allclose(env.last_action, [[-2.0, 4.0], [2.0, 0.0]])
+    assert obs.shape == (2, 2)
+    assert reward.tolist() == [1.0, 2.0]
+    assert done.tolist() == [True, True]
+    assert info["terminated"].tolist() == [True, False]
+    assert info["truncated"].tolist() == [False, True]
+    assert info["time_outs"].tolist() == [False, True]
 
 
 class _FakeMJLabEnv:
