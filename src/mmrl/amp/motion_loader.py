@@ -13,7 +13,7 @@ import numpy as np
 import torch
 
 from mmrl.amp.features import build_amp_frame
-from mmrl.config import get_config_value, require_config_value
+from mmrl.config import require_config_value
 from mmrl.memories import AMPTransitionBatch
 
 
@@ -237,23 +237,18 @@ class AMPLoader:
         """Construct from the environment-owned ``cfg.amp`` object."""
         return cls(
             device=device,
-            time_between_frames=_required_any(
-                cfg, "time_between_frames", "dt"
-            ),
-            motion_files=_required_any(cfg, "motion_files", "amp_motion_files"),
-            motion_weights=_first_value(
-                cfg, "motion_weights", "amp_motion_weights", default={}
-            ),
+            time_between_frames=require_config_value(cfg, "dt"),
+            motion_files=require_config_value(cfg, "amp_motion_files"),
+            motion_weights=require_config_value(cfg, "amp_motion_weights"),
             joint_names=require_config_value(cfg, "joint_names"),
-            anchor_base=_required_any(cfg, "anchor_base", "amp_anchor_base"),
-            anchor_links=_required_any(cfg, "anchor_links", "amp_anchor_links"),
+            anchor_base=require_config_value(cfg, "amp_anchor_base"),
+            anchor_links=require_config_value(cfg, "amp_anchor_links"),
             urdf_path=require_config_value(cfg, "urdf_path"),
-            preload_transitions=get_config_value(cfg, "preload_transitions", True),
-            num_preload_transitions=_first_value(
-                cfg,
-                "num_preload_transitions",
-                "amp_num_preload_transitions",
-                default=1_000_000,
+            preload_transitions=require_config_value(
+                cfg, "preload_transitions"
+            ),
+            num_preload_transitions=require_config_value(
+                cfg, "amp_num_preload_transitions"
             ),
             forward_kinematics_factory=forward_kinematics_factory,
         )
@@ -389,21 +384,3 @@ def _interpolate(trajectory: torch.Tensor, frame_positions) -> torch.Tensor:
     high = position.ceil().long()
     blend = (position - low).unsqueeze(-1)
     return (1.0 - blend) * trajectory[low] + blend * trajectory[high]
-
-
-def _first_value(cfg: Any, *names: str, default: Any = None) -> Any:
-    missing = object()
-    for name in names:
-        value = get_config_value(cfg, name, missing)
-        if value is not missing:
-            return value
-    return default
-
-
-def _required_any(cfg: Any, *names: str) -> Any:
-    missing = object()
-    value = _first_value(cfg, *names, default=missing)
-    if value is missing:
-        joined = " or ".join(names)
-        raise KeyError(f"Missing required AMP config value: {joined}")
-    return value

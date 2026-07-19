@@ -32,15 +32,15 @@ def test_amp_loader_builds_and_samples_expert_transitions(tmp_path):
         )
 
     class AMPCfg:
-        time_between_frames = 0.1
-        motion_files = (motion_path,)
-        motion_weights = {"walk.pkl": 2.0}
+        dt = 0.1
+        amp_motion_files = (motion_path,)
+        amp_motion_weights = {"walk.pkl": 2.0}
         joint_names = ("joint_a", "joint_b")
-        anchor_base = "base"
-        anchor_links = ("foot",)
+        amp_anchor_base = "base"
+        amp_anchor_links = ("foot",)
         urdf_path = tmp_path / "robot.urdf"
         preload_transitions = True
-        num_preload_transitions = 16
+        amp_num_preload_transitions = 16
 
     loader = AMPLoader.from_config(
         AMPCfg(), "cpu", forward_kinematics_factory=_FakeKinematics

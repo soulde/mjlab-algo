@@ -109,22 +109,21 @@ The environment-owned AMP config provides the motion and robot layout:
 ```python
 class AMPCfg:
     dt = 0.02
-    motion_files = ("motions/walk.pkl",)
-    motion_weights = {"walk.pkl": 1.0}
+    amp_motion_files = ("motions/walk.pkl",)
+    amp_motion_weights = {"walk.pkl": 1.0}
     joint_names = (...,)
-    anchor_base = "base"
-    anchor_links = ("FL_foot", "FR_foot", "RL_foot", "RR_foot")
+    amp_anchor_base = "base"
+    amp_anchor_links = ("FL_foot", "FR_foot", "RL_foot", "RR_foot")
     urdf_path = "robots/go2/go2.urdf"
     preload_transitions = True
-    num_preload_transitions = 1_000_000
+    amp_num_preload_transitions = 1_000_000
 ```
 
 The loader validates GMR pickle motions, derives velocities, computes
 anchor-relative link positions from the URDF, builds the shared AMP feature
 layout, applies motion weights, interpolates frames, and optionally preloads
-transitions. The reference-style names `amp_motion_files`,
-`amp_motion_weights`, `amp_anchor_base`, `amp_anchor_links`, and
-`amp_num_preload_transitions` are also accepted inside `env.cfg.amp`.
+transitions. These fields are required in `env.cfg.amp`; alternative aliases
+are not accepted.
 
 For wrappers without observation-group support, the wrapped environment must
 implement:
