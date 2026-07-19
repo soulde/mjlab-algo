@@ -14,6 +14,10 @@ register tasks, algorithms, or components in this package.
 
 ## Algorithms
 
+- AMP
+  - PPO with an LSGAN motion discriminator, policy transition replay,
+    expert-motion sampling, feature normalization, gradient penalty, and
+    configurable task/style reward blending.
 - PPO
   - Native continuous-action implementation with clipped objectives, GAE,
     adaptive-KL scheduling, and vectorized rollout collection.
@@ -68,6 +72,7 @@ Top-level imports:
 
 ```python
 from mmrl import FastSAC, FastSACRunner, FastSACRunnerCfg
+from mmrl import AMP, AMPRunner, AMPRunnerCfg
 from mmrl import TDMPC2, TDMPC2Runner, TDMPC2RunnerCfg
 from mmrl import PPO, PPORunner, PPORunnerCfg
 ```
@@ -86,7 +91,47 @@ Environment and memory imports:
 from mmrl.env_wrappers import GymnasiumEnvWrapper
 from mmrl.env_wrappers import MJLabSingleEnvWrapper, MJLabVectorEnvWrapper
 from mmrl.memories import EpisodeMemory, OffPolicyReplayMemory
+from mmrl.memories import AMPExpertSource, TensorAMPDataset
 ```
+
+### AMP Integration
+
+AMP is implemented as a PPO specialization and does not depend on RSL-RL. An
+environment package owns motion-file parsing and passes an expert transition
+source directly to `AMPRunner`:
+
+```python
+runner = AMPRunner(env, AMPRunnerCfg(), expert_source, log_dir)
+runner.learn()
+```
+
+The expert source exposes the AMP observation dimension and samples consecutive
+expert frames:
+
+```python
+class ExpertSource:
+    observation_dim: int
+
+    def sample(self, batch_size: int, device: torch.device):
+        return AMPTransitionBatch(state, next_state)
+```
+
+For already-preprocessed transitions, use `TensorAMPDataset(state,
+next_state)`. Environment-specific motion loaders can implement the same
+contract without being registered with mmrl.
+
+The wrapped environment or its `unwrapped` object must implement:
+
+```python
+def get_amp_observations() -> torch.Tensor:
+    # Shape: (num_envs, amp_observation_dim)
+    ...
+```
+
+If `step()` automatically resets completed environments, its info dictionary
+must include `terminal_amp_observations`, containing either one row per
+environment or one row per completed environment. This preserves the real
+terminal transition instead of pairing the previous state with a reset state.
 
 ## Logging
 
@@ -135,12 +180,19 @@ src/mmrl/
     config.py
     fastsac.py
     runner.py
+  amp/
+    amp.py
+    config.py
+    runner.py
   memories/
+    amp.py
     base.py
     episode.py
     off_policy.py
     on_policy.py
+    storage.py
   models/
+    amp.py
     actors.py
     base.py
     critics.py
@@ -206,7 +258,12 @@ mode for headless playback or recording.
 - PPO is implemented inside `mmrl` and has no runtime dependency on RSL-RL.
   Its design was adapted from RSL-RL under BSD-3-Clause; the upstream license
   is retained in `licenses/rsl_rl-BSD-3-Clause.txt`.
-- Both algorithms flatten MJLab dict observations for their policy inputs.
+- AMP extends the native PPO implementation. Its LSGAN reward, policy replay,
+  expert sampling, and terminal-state handling follow the reference structure
+  used by the RSL-RL fork in `amp_go2-main`, adapted to mmrl ownership
+  boundaries.
+- Policy runners consume flattened observations supplied by environment
+  wrappers; AMP observations remain a separate environment-defined tensor.
 
 ## Config Compatibility
 
@@ -265,6 +322,8 @@ Current memory storage is split by sampling pattern:
   length episodes intact and evicts by total timestep capacity.
 - `TensorRolloutStorage` backs on-policy rollouts with preallocated
   `(num_steps, num_envs, ...)` tensors, GAE returns, and shuffled mini-batches.
+- `TensorRingStorage` also backs AMP policy transition replay. AMP replay only
+  trains the discriminator; PPO policy updates remain on-policy.
 
 Planned upgrades:
 
