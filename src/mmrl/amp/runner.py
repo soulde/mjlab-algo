@@ -56,6 +56,7 @@ class AMPRunner(OnPolicyRunner):
             get_config_value(train_cfg, "actor_critic"),
             obs_dim=env.obs_dim,
             action_dim=env.action_dim,
+            critic_obs_dim=getattr(env, "critic_obs_dim", env.obs_dim),
         ).to(self.device)
         discriminator_cfg = get_config_value(train_cfg, "discriminator")
         self.discriminator = AMPDiscriminator(
@@ -76,6 +77,7 @@ class AMPRunner(OnPolicyRunner):
             obs_shape=(env.obs_dim,),
             action_shape=(env.action_dim,),
             device=self.device,
+            critic_obs_shape=(getattr(env, "critic_obs_dim", env.obs_dim),),
         )
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -110,16 +112,19 @@ class AMPRunner(OnPolicyRunner):
 
     def learn(self) -> None:
         obs = self.env.reset().to(self.device)
+        critic_obs = self._get_critic_observations(obs)
         amp_obs = self._get_amp_observations()
         start_time = time()
         max_iterations = get_config_value(self.cfg, "max_iterations")
         log_interval = get_config_value(self.cfg, "log_interval")
         for iteration in range(self.current_iteration, max_iterations):
             collection_start = time()
-            obs, amp_obs = self._collect_rollout(obs, amp_obs)
+            obs, critic_obs, amp_obs = self._collect_rollout(
+                obs, critic_obs, amp_obs
+            )
             collection_time = time() - collection_start
             with torch.no_grad():
-                last_value = self.policy.critic(obs)
+                last_value = self.policy.critic(critic_obs)
             algorithm_cfg = get_config_value(self.cfg, "algorithm")
             self.memory.compute_returns(
                 last_value,
@@ -146,15 +151,19 @@ class AMPRunner(OnPolicyRunner):
 
     @torch.no_grad()
     def _collect_rollout(
-        self, obs: torch.Tensor, amp_obs: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+        self,
+        obs: torch.Tensor,
+        critic_obs: torch.Tensor,
+        amp_obs: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         num_steps = get_config_value(self.cfg, "memory.num_steps_per_env")
         algorithm_cfg = get_config_value(self.cfg, "algorithm")
         discriminator_cfg = get_config_value(self.cfg, "discriminator")
         for _ in range(num_steps):
-            action, log_prob, value = self.algorithm.act(obs)
+            action, log_prob, value = self.algorithm.act(obs, critic_obs)
             next_obs, task_reward, done, info = self.env.step(action)
             next_obs = next_obs.to(self.device)
+            next_critic_obs = self._get_critic_observations(next_obs)
             done = done.to(self.device, dtype=torch.bool)
             next_amp_obs = self._get_amp_observations()
             replay_next_amp_obs = self._terminal_amp_observations(
@@ -177,11 +186,26 @@ class AMPRunner(OnPolicyRunner):
                     )
                 )
             self.algorithm.add_amp_transition(amp_obs, replay_next_amp_obs)
-            self.memory.add(obs, action, reward, done, log_prob, value)
+            self.memory.add(
+                obs,
+                action,
+                reward,
+                done,
+                log_prob,
+                value,
+                critic_obs=critic_obs,
+            )
             self._track_episodes(reward, done)
             obs = next_obs
+            critic_obs = next_critic_obs
             amp_obs = next_amp_obs
-        return obs, amp_obs
+        return obs, critic_obs, amp_obs
+
+    def _get_critic_observations(self, actor_obs: torch.Tensor) -> torch.Tensor:
+        getter = getattr(self.env, "get_critic_observations", None)
+        if getter is None:
+            return actor_obs
+        return getter().to(self.device)
 
     def _terminal_amp_observations(
         self, next_amp_obs: torch.Tensor, done: torch.Tensor, info

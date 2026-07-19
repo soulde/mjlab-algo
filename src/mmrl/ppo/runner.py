@@ -46,6 +46,7 @@ class PPORunner(OnPolicyRunner):
             get_config_value(train_cfg, "actor_critic"),
             obs_dim=env.obs_dim,
             action_dim=env.action_dim,
+            critic_obs_dim=getattr(env, "critic_obs_dim", env.obs_dim),
         ).to(self.device)
         self.algorithm = PPO(
             get_config_value(train_cfg, "algorithm"),
@@ -58,6 +59,7 @@ class PPORunner(OnPolicyRunner):
             obs_shape=(env.obs_dim,),
             action_shape=(env.action_dim,),
             device=self.device,
+            critic_obs_shape=(getattr(env, "critic_obs_dim", env.obs_dim),),
         )
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -87,16 +89,17 @@ class PPORunner(OnPolicyRunner):
 
     def learn(self) -> None:
         obs = self.env.reset().to(self.device)
+        critic_obs = self._get_critic_observations(obs)
         start_time = time()
         max_iterations = get_config_value(self.cfg, "max_iterations")
         log_interval = get_config_value(self.cfg, "log_interval")
         for iteration in range(self.current_iteration, max_iterations):
             collection_start = time()
-            obs = self._collect_rollout(obs)
+            obs, critic_obs = self._collect_rollout(obs, critic_obs)
             collection_time = time() - collection_start
 
             with torch.no_grad():
-                last_value = self.policy.critic(obs)
+                last_value = self.policy.critic(critic_obs)
             algorithm_cfg = get_config_value(self.cfg, "algorithm")
             self.memory.compute_returns(
                 last_value,
@@ -123,12 +126,16 @@ class PPORunner(OnPolicyRunner):
         self.logger.close()
 
     @torch.no_grad()
-    def _collect_rollout(self, obs: torch.Tensor) -> torch.Tensor:
+    def _collect_rollout(
+        self, obs: torch.Tensor, critic_obs: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         num_steps = get_config_value(self.cfg, "memory.num_steps_per_env")
         gamma = get_config_value(self.cfg, "algorithm.gamma")
         for _ in range(num_steps):
-            action, log_prob, value = self.algorithm.act(obs)
+            action, log_prob, value = self.algorithm.act(obs, critic_obs)
             next_obs, reward, done, info = self.env.step(action)
+            next_obs = next_obs.to(self.device)
+            next_critic_obs = self._get_critic_observations(next_obs)
             reward = reward.to(self.device, dtype=torch.float32)
             done = done.to(self.device, dtype=torch.bool)
             time_outs = info.get("time_outs") if isinstance(info, dict) else None
@@ -136,10 +143,25 @@ class PPORunner(OnPolicyRunner):
                 reward = reward + gamma * value.squeeze(-1) * torch.as_tensor(
                     time_outs, device=self.device, dtype=torch.float32
                 )
-            self.memory.add(obs, action, reward, done, log_prob, value)
+            self.memory.add(
+                obs,
+                action,
+                reward,
+                done,
+                log_prob,
+                value,
+                critic_obs=critic_obs,
+            )
             self._track_episodes(reward, done)
-            obs = next_obs.to(self.device)
-        return obs
+            obs = next_obs
+            critic_obs = next_critic_obs
+        return obs, critic_obs
+
+    def _get_critic_observations(self, actor_obs: torch.Tensor) -> torch.Tensor:
+        getter = getattr(self.env, "get_critic_observations", None)
+        if getter is None:
+            return actor_obs
+        return getter().to(self.device)
 
     def _track_episodes(self, reward: torch.Tensor, done: torch.Tensor) -> None:
         self._episode_rewards += reward.detach().cpu()

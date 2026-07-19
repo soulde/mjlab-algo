@@ -30,9 +30,15 @@ class PPO:
 
     @torch.no_grad()
     def act(
-        self, obs: torch.Tensor
+        self,
+        obs: torch.Tensor,
+        critic_obs: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        return self.policy.act(obs.to(self.device))
+        actor_value = obs.to(self.device)
+        critic_value = (
+            critic_obs.to(self.device) if critic_obs is not None else None
+        )
+        return self.policy.act(actor_value, critic_value)
 
     def update(self, memory: OnPolicyRolloutMemory) -> dict[str, float]:
         value_loss_sum = 0.0

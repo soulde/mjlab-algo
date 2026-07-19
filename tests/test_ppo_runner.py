@@ -31,6 +31,26 @@ class _PPOEnv(EnvWrapper):
         pass
 
 
+class _AsymmetricPPOEnv(_PPOEnv):
+    critic_obs_dim = 5
+
+    def __init__(self):
+        super().__init__()
+        self.critic_obs = torch.zeros(self.num_envs, self.critic_obs_dim)
+
+    def reset(self):
+        self.critic_obs.zero_()
+        return super().reset()
+
+    def step(self, action):
+        obs, reward, done, info = super().step(action)
+        self.critic_obs.fill_(float(self.steps))
+        return obs, reward, done, info
+
+    def get_critic_observations(self):
+        return self.critic_obs
+
+
 def _runner_cfg() -> PPORunnerCfg:
     return PPORunnerCfg(
         device="cpu",
@@ -60,6 +80,15 @@ def test_ppo_runner_learns_saves_and_loads(tmp_path):
     restored = PPORunner(_PPOEnv(), _runner_cfg(), tmp_path / "restored")
     restored.load(checkpoint)
     assert restored.current_iteration == 1
+
+
+def test_ppo_runner_uses_asymmetric_critic_observations(tmp_path):
+    runner = PPORunner(_AsymmetricPPOEnv(), _runner_cfg(), tmp_path)
+
+    runner.learn()
+
+    assert runner.policy.critic.net[0].in_features == 5
+    assert runner.memory.storage["critic_obs"].shape[-1] == 5
 
 
 def test_ppo_runner_rejects_external_components(tmp_path):
