@@ -50,3 +50,27 @@ class EnvWrapper(ABC):
     def close(self) -> None:
         """Close the environment."""
 
+    def get_amp_observations(self) -> torch.Tensor:
+        """Return simulator-specific AMP observations through a common API."""
+        environment = self.unwrapped
+        getter = getattr(environment, "get_amp_observations", None)
+        if not callable(getter):
+            raise TypeError(
+                "The wrapped environment must implement get_amp_observations()."
+            )
+        return self._format_amp_observations(getter())
+
+    @property
+    def amp_observation_dim(self) -> int:
+        """Dimension of one simulator AMP observation."""
+        return int(self.get_amp_observations().shape[-1])
+
+    def _format_amp_observations(self, value: Any) -> torch.Tensor:
+        tensor = torch.as_tensor(value, dtype=torch.float32, device=self.device)
+        if tensor.ndim == 1 and self.num_envs == 1:
+            tensor = tensor.unsqueeze(0)
+        if tensor.ndim != 2 or tensor.shape[0] != self.num_envs:
+            raise ValueError(
+                "AMP observations must have shape (num_envs, amp_obs_dim)."
+            )
+        return tensor

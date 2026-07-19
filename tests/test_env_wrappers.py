@@ -187,3 +187,12 @@ def test_isaaclab_wrapper_vectorized_dict_observations_and_action_scaling():
 
     wrapped.close()
     assert env.closed
+
+
+def test_wrapper_forwards_native_amp_observations():
+    env = _FakeGymnasiumEnv()
+    env.get_amp_observations = lambda: [1.0, 2.0, 3.0]
+    wrapped = GymnasiumEnvWrapper(env, device="cpu")
+
+    assert wrapped.amp_observation_dim == 3
+    assert wrapped.get_amp_observations().tolist() == [[1.0, 2.0, 3.0]]

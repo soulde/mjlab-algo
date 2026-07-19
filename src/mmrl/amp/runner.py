@@ -106,20 +106,7 @@ class AMPRunner(OnPolicyRunner):
                 )
 
     def _get_amp_observations(self) -> torch.Tensor:
-        source = self.env
-        if not hasattr(source, "get_amp_observations"):
-            source = self.env.unwrapped
-        getter = getattr(source, "get_amp_observations", None)
-        if getter is None:
-            raise TypeError(
-                "AMP environments must implement get_amp_observations()."
-            )
-        value = torch.as_tensor(getter(), device=self.device, dtype=torch.float32)
-        if value.ndim != 2 or value.shape[0] != self.env.num_envs:
-            raise ValueError(
-                "AMP observations must have shape (num_envs, amp_obs_dim)."
-            )
-        return value
+        return self.env.get_amp_observations().to(self.device)
 
     def learn(self) -> None:
         obs = self.env.reset().to(self.device)
