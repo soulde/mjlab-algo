@@ -89,7 +89,7 @@ Environment and memory imports:
 
 ```python
 from mmrl.env_wrappers import GymnasiumEnvWrapper
-from mmrl.env_wrappers import MJLabSingleEnvWrapper, MJLabVectorEnvWrapper
+from mmrl.env_wrappers import MJLabVectorEnvWrapper
 from mmrl.memories import EpisodeMemory, OffPolicyReplayMemory
 from mmrl.amp import AMPLoader
 ```

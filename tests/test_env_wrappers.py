@@ -5,6 +5,7 @@ import torch
 
 from mmrl.env_wrappers.gymnasium import GymnasiumEnvWrapper
 from mmrl.env_wrappers.isaaclab import IsaacLabEnvWrapper
+from mmrl.env_wrappers.mjlab import MJLabVectorEnvWrapper
 
 
 class _FakeBox:
@@ -106,6 +107,62 @@ def test_gymnasium_make_delegates_to_gymnasium():
         wrapped = GymnasiumEnvWrapper.make("Pendulum-v1", device="cpu")
 
     assert wrapped.obs_dim == 2
+
+
+class _FakeMJLabEnv:
+    num_envs = 2
+    device = "cpu"
+
+    class _Unwrapped:
+        action_manager = type("ActionManager", (), {"total_action_dim": 2})()
+
+    def __init__(self):
+        self.unwrapped = self._Unwrapped()
+        self.last_action = None
+        self.closed = False
+
+    def reset(self):
+        return {
+            "policy": torch.tensor([[1.0, 2.0], [3.0, 4.0]]),
+            "extra": np.asarray([[5.0], [6.0]], dtype=np.float32),
+        }, {}
+
+    def step(self, action):
+        self.last_action = action
+        return (
+            {"policy": torch.zeros(2, 2), "extra": torch.ones(2, 1)},
+            torch.tensor([1.0, 2.0]),
+            torch.tensor([True, False]),
+            torch.tensor([False, True]),
+            {"success": torch.tensor([1.0, 0.0])},
+        )
+
+    def close(self):
+        self.closed = True
+
+
+def test_mjlab_vector_wrapper_preserves_parallel_batch():
+    env = _FakeMJLabEnv()
+    wrapped = MJLabVectorEnvWrapper(env)
+
+    assert wrapped.num_envs == 2
+    assert wrapped.obs_dim == 3
+    assert wrapped.action_dim == 2
+    assert wrapped.reset().tolist() == [[1.0, 2.0, 5.0], [3.0, 4.0, 6.0]]
+    assert wrapped.rand_act().shape == (2, 2)
+
+    obs, reward, done, info = wrapped.step(torch.zeros(2, 2))
+
+    assert obs.shape == (2, 3)
+    assert reward.tolist() == [1.0, 2.0]
+    assert done.tolist() == [True, True]
+    assert info["terminated"].tolist() == [True, False]
+    assert info["truncated"].tolist() == [False, True]
+    assert info["time_outs"].tolist() == [False, True]
+    assert env.last_action.device == wrapped.device
+
+    wrapped.close()
+    assert env.closed
 
 
 class _FakeIsaacLabEnv:
