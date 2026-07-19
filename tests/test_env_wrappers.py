@@ -109,17 +109,23 @@ def test_gymnasium_make_delegates_to_gymnasium():
     assert wrapped.obs_dim == 2
 
 
-class _FakeClassicGymEnv(_FakeGymnasiumEnv):
+class _FakeGymEnv(_FakeGymnasiumEnv):
     def reset(self):
-        return np.asarray([2.0, -2.0], dtype=np.float32)
+        return np.asarray([2.0, -2.0], dtype=np.float32), {}
 
     def step(self, action):
         self.last_action = action
-        return np.asarray([0.0, 1.0], dtype=np.float32), 2.5, True, {"classic": 1}
+        return (
+            np.asarray([0.0, 1.0], dtype=np.float32),
+            2.5,
+            True,
+            False,
+            {"gym": 1},
+        )
 
 
-def test_gym_wrapper_supports_classic_reset_and_step_api():
-    env = _FakeClassicGymEnv()
+def test_gym_wrapper_supports_current_reset_and_step_api():
+    env = _FakeGymEnv()
     wrapped = GymEnvWrapper(env, device="cpu")
 
     obs = wrapped.reset()
@@ -130,7 +136,10 @@ def test_gym_wrapper_supports_classic_reset_and_step_api():
     assert next_obs.tolist() == [[0.0, 1.0]]
     assert reward.tolist() == [2.5]
     assert done.tolist() == [True]
-    assert info == {"classic": 1}
+    assert info["gym"] == 1
+    assert info["terminated"] is True
+    assert info["truncated"] is False
+    assert info["time_outs"].tolist() == [False]
 
 
 class _FakeIsaacLabEnv:
