@@ -16,7 +16,6 @@ class IsaacLabEnvWrapper(EnvWrapper):
         self,
         env: Any,
         device: str | torch.device | None = None,
-        obs_groups: Mapping[str, Sequence[str]] | None = None,
     ):
         self.env = env
         self._device = torch.device(
@@ -27,15 +26,8 @@ class IsaacLabEnvWrapper(EnvWrapper):
         self._num_envs = int(getattr(env, "num_envs", 1))
         self._action_dim = self._infer_action_dim()
         self._obs_dim: int | None = None
-        self._critic_obs: torch.Tensor | None = None
-        self._amp_obs: torch.Tensor | None = None
+        self._observation_groups: dict[str, torch.Tensor] = {}
         self._observations_initialized = False
-        self.obs_groups = {
-            "actor": ("policy",),
-            "critic": ("critic",),
-            "amp": ("amp",),
-            **{name: tuple(groups) for name, groups in (obs_groups or {}).items()},
-        }
         self._action_low, self._action_high = self._infer_action_bounds()
 
     @property
@@ -106,57 +98,46 @@ class IsaacLabEnvWrapper(EnvWrapper):
             tensor = tensor.reshape(self.num_envs, -1)
         return tensor
 
-    def _select_observation_groups(
-        self, observations: Mapping[str, Any], set_name: str
-    ) -> torch.Tensor | None:
-        values = [
-            observations[group]
-            for group in self.obs_groups[set_name]
-            if group in observations
-        ]
-        if not values:
-            return None
-        return torch.cat([self._obs_to_tensor(value) for value in values], dim=-1)
-
     def _process_observations(self, observations: Any) -> torch.Tensor:
         self._observations_initialized = True
         if not isinstance(observations, Mapping):
             actor_obs = self._obs_to_tensor(observations)
-            self._critic_obs = actor_obs
-            self._amp_obs = None
+            self._observation_groups = {"policy": actor_obs}
             self._obs_dim = int(actor_obs.shape[-1])
             return actor_obs
 
-        actor_obs = self._select_observation_groups(observations, "actor")
+        self._observation_groups = {
+            name: self._obs_to_tensor(value)
+            for name, value in observations.items()
+        }
+        actor_obs = self._observation_groups.get("policy")
         if actor_obs is None:
             actor_obs = self._obs_to_tensor(observations)
-        critic_obs = self._select_observation_groups(observations, "critic")
-        self._critic_obs = critic_obs if critic_obs is not None else actor_obs
-        self._amp_obs = self._select_observation_groups(observations, "amp")
         self._obs_dim = int(actor_obs.shape[-1])
         return actor_obs
 
-    def get_critic_observations(self) -> torch.Tensor:
-        """Return the latest critic observation set, falling back to actor."""
+    def get_observation_groups(self) -> Mapping[str, torch.Tensor]:
+        """Return all observation groups from the latest reset or step."""
         if not self._observations_initialized:
             self.reset()
-        assert self._critic_obs is not None
-        return self._critic_obs
+        return self._observation_groups
 
-    @property
-    def critic_obs_dim(self) -> int:
-        return int(self.get_critic_observations().shape[-1])
+    def select_observation_groups(
+        self, groups: Sequence[str]
+    ) -> torch.Tensor:
+        """Concatenate configured environment groups into an observation set."""
+        observations = self.get_observation_groups()
+        missing = [name for name in groups if name not in observations]
+        if missing:
+            names = ", ".join(missing)
+            raise KeyError(f"IsaacLab observations are missing group(s): {names}.")
+        if not groups:
+            raise ValueError("At least one IsaacLab observation group is required.")
+        return torch.cat([observations[name] for name in groups], dim=-1)
 
     def get_amp_observations(self) -> torch.Tensor:
-        """Return the latest IsaacLab AMP observation group."""
-        if not self._observations_initialized:
-            self.reset()
-        if self._amp_obs is None:
-            groups = ", ".join(self.obs_groups["amp"])
-            raise KeyError(
-                f"IsaacLab observations are missing AMP group(s): {groups}."
-            )
-        return self._amp_obs
+        """Return the conventional AMP group for direct wrapper consumers."""
+        return self.select_observation_groups(("amp",))
 
     def _scale_action(self, action: torch.Tensor) -> torch.Tensor:
         action = action.to(self.device, dtype=torch.float32).reshape(
@@ -170,7 +151,8 @@ class IsaacLabEnvWrapper(EnvWrapper):
         )
 
     def rand_act(self) -> torch.Tensor:
-        return 2.0 * torch.rand(self.num_envs, self.action_dim, device=self.device) - 1.0
+        shape = (self.num_envs, self.action_dim)
+        return 2.0 * torch.rand(*shape, device=self.device) - 1.0
 
     def reset(self) -> torch.Tensor:
         result = self.env.reset()

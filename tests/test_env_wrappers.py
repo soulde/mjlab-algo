@@ -170,11 +170,7 @@ class _FakeIsaacLabEnv:
 
 def test_isaaclab_wrapper_vectorized_dict_observations_and_action_scaling():
     env = _FakeIsaacLabEnv()
-    wrapped = IsaacLabEnvWrapper(
-        env,
-        device="cpu",
-        obs_groups={"critic": ("policy", "privileged")},
-    )
+    wrapped = IsaacLabEnvWrapper(env, device="cpu")
 
     obs = wrapped.reset()
     next_obs, reward, done, info = wrapped.step(
@@ -183,11 +179,10 @@ def test_isaaclab_wrapper_vectorized_dict_observations_and_action_scaling():
 
     assert wrapped.num_envs == 2
     assert wrapped.obs_dim == 2
-    assert wrapped.critic_obs_dim == 3
     assert wrapped.amp_observation_dim == 2
     assert wrapped.action_dim == 2
     assert obs.tolist() == [[1.0, 2.0], [3.0, 4.0]]
-    assert wrapped.get_critic_observations().tolist() == [
+    assert wrapped.select_observation_groups(("policy", "privileged")).tolist() == [
         [0.0, 0.0, 1.0],
         [0.0, 0.0, 1.0],
     ]
@@ -213,12 +208,11 @@ def test_wrapper_forwards_native_amp_observations():
 
 def test_isaaclab_wrapper_requires_configured_amp_group():
     env = _FakeIsaacLabEnv()
-    wrapped = IsaacLabEnvWrapper(
-        env, device="cpu", obs_groups={"amp": ("motion",)}
-    )
+    wrapped = IsaacLabEnvWrapper(env, device="cpu")
+    wrapped.reset()
 
     try:
-        wrapped.get_amp_observations()
+        wrapped.select_observation_groups(("motion",))
     except KeyError as error:
         assert "motion" in str(error)
     else:
