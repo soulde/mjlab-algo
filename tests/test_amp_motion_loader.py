@@ -1,8 +1,10 @@
 import pickle
 
 import numpy as np
+import pytest
 
 from mmrl.amp import AMPLoader
+from mmrl.amp.motion_loader import MuJoCoForwardKinematics
 
 
 class _FakeKinematics:
@@ -47,3 +49,38 @@ def test_amp_loader_builds_and_samples_expert_transitions(tmp_path):
 
     assert loader.observation_dim == 20
     assert batch.state.shape == batch.next_state.shape == (4, 20)
+
+
+def test_mujoco_fk_resolves_fixed_amp_links(tmp_path):
+    pytest.importorskip("mujoco")
+    urdf = tmp_path / "robot.urdf"
+    urdf.write_text(
+        """<robot name="test">
+  <link name="base"/>
+  <link name="leg">
+    <inertial>
+      <mass value="1"/>
+      <inertia ixx="1" ixy="0" ixz="0"
+               iyy="1" iyz="0" izz="1"/>
+    </inertial>
+  </link>
+  <link name="foot"/>
+  <joint name="hip" type="revolute">
+    <parent link="base"/><child link="leg"/>
+    <origin xyz="0 0 0"/><axis xyz="0 1 0"/>
+    <limit lower="-1" upper="1" effort="1" velocity="1"/>
+  </joint>
+  <joint name="foot_fixed" type="fixed">
+    <parent link="leg"/><child link="foot"/>
+    <origin xyz="0 0 -1"/>
+  </joint>
+</robot>"""
+    )
+    kinematics = MuJoCoForwardKinematics(
+        urdf, ("hip",), "base", ("foot",)
+    )
+
+    positions = kinematics.link_positions(np.zeros((2, 1)))
+
+    assert positions.shape == (2, 1, 3)
+    np.testing.assert_allclose(positions[:, 0], [[0, 0, -1], [0, 0, -1]])
