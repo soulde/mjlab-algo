@@ -82,7 +82,7 @@ def test_runner_builds_fixed_agent_and_memory(monkeypatch, tmp_path):
     monkeypatch.setattr("mmrl.tdmpc2.runner.TDMPC2", FakeAgent)
     monkeypatch.setattr("mmrl.tdmpc2.runner.WorldModel", FakeModel)
     monkeypatch.setattr("mmrl.tdmpc2.runner.EpisodeMemory", FakeMemory)
-    cfg = TDMPC2RunnerCfg(enable_wandb=False, episode_length=0)
+    cfg = TDMPC2RunnerCfg(episode_length=0)
 
     runner = TDMPC2Runner(_RunnerEnv(), cfg, tmp_path)
 
@@ -94,7 +94,7 @@ def test_runner_builds_fixed_agent_and_memory(monkeypatch, tmp_path):
 
 
 def test_runner_rejects_external_algorithm(monkeypatch, tmp_path):
-    cfg = TDMPC2RunnerCfg(enable_wandb=False)
+    cfg = TDMPC2RunnerCfg()
     cfg.algorithm.class_name = "environment.TDMPC2"
 
     try:
@@ -116,11 +116,6 @@ def test_runner_accepts_nested_class_style_config(monkeypatch, tmp_path):
         eval_freq = 100
         log_freq = 0
         save_agent = False
-        enable_wandb = False
-        wandb_project = "mmrl"
-        wandb_entity = None
-        wandb_silent = True
-        exp_name = "test"
         algorithm = TDMPC2AlgorithmCfg()
         model = TDMPC2ModelCfg(model_size=1)
         memory = EpisodeMemoryCfg(capacity=100, batch_size=2)

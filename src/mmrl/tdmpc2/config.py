@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, field
 
+from mmrl.logging import LoggerCfg
+
 
 MODEL_SIZE: dict[int, dict[str, int]] = {
     1: {
@@ -131,11 +133,7 @@ class TDMPC2RunnerCfg:
     eval_freq: int = 50_000
     log_freq: int = 1_000
     save_agent: bool = True
-    enable_wandb: bool = False
-    wandb_project: str = "mmrl"
-    wandb_entity: str | None = None
-    wandb_silent: bool = False
-    exp_name: str = "default"
     algorithm: TDMPC2AlgorithmCfg = field(default_factory=TDMPC2AlgorithmCfg)
     model: TDMPC2ModelCfg = field(default_factory=TDMPC2ModelCfg)
     memory: EpisodeMemoryCfg = field(default_factory=EpisodeMemoryCfg)
+    logger: LoggerCfg = field(default_factory=LoggerCfg)

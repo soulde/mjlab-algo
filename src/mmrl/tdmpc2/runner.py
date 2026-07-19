@@ -12,7 +12,7 @@ import numpy as np
 import torch
 
 from mmrl.config import config_to_dict, get_config_value
-from mmrl.logging import format_training_log
+from mmrl.logging import MetricLogger, format_training_log
 from mmrl.runners.model_based import ModelBasedRunner
 from mmrl.env_wrappers import EnvWrapper
 from mmrl.memories import EpisodeMemory
@@ -89,13 +89,15 @@ class TDMPC2Runner(ModelBasedRunner):
         )
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.logger = MetricLogger(
+            self.log_dir,
+            get_config_value(train_cfg, "logger"),
+            config_to_dict(train_cfg),
+        )
 
         self._step = 0
         self._ep_idx = 0
         self._start_time = time()
-        self._wandb = None
-
-        self._setup_wandb()
 
     def get_inference_policy(self, device: str | torch.device | None = None):
         """Return the TD-MPC2 policy callable used by play scripts."""
@@ -118,26 +120,6 @@ class TDMPC2Runner(ModelBasedRunner):
     def load(self, path: str | Path) -> None:
         self.agent.load(path)
 
-    def _setup_wandb(self) -> None:
-        """Initialize W&B logging."""
-        if not self.cfg.enable_wandb:
-            return
-        try:
-            import wandb
-
-            wandb.init(
-                project=self.cfg.wandb_project,
-                entity=self.cfg.wandb_entity,
-                name=str(self.cfg.seed),
-                group=self.cfg.exp_name,
-                dir=str(self.log_dir),
-                config=config_to_dict(self.train_cfg),
-                settings=wandb.Settings(silent=True) if self.cfg.wandb_silent else None,
-            )
-            self._wandb = wandb
-        except Exception:
-            self._wandb = None
-
     def _common_metrics(self) -> dict:
         """Return dictionary of common metrics (step, episode, SPS)."""
         elapsed = time() - self._start_time
@@ -149,13 +131,9 @@ class TDMPC2Runner(ModelBasedRunner):
         )
 
     def _log(self, metrics: dict, category: str) -> None:
-        """Log metrics to console and optionally W&B."""
-        if self._wandb is not None:
-            _d = {f"{category}/{k}": v for k, v in metrics.items()}
-            step = metrics.get("step", self._step)
-            self._wandb.log(_d, step=step)
-
+        """Log metrics to the console and configured metric backends."""
         step = int(metrics.get("step", self._step))
+        self.logger.log(metrics, step=step, prefix=category)
         elapsed = float(metrics.get("elapsed_time", time() - self._start_time))
         eta = (
             (self.cfg.steps - step) / max(step / max(elapsed, 1e-6), 1e-6)
@@ -389,5 +367,4 @@ class TDMPC2Runner(ModelBasedRunner):
             self.save(save_path)
             print(f"Saved final model to {save_path}")
 
-        if self._wandb is not None:
-            self._wandb.finish()
+        self.logger.close()
