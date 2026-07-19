@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pickle
+import xml.etree.ElementTree as ET
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -84,7 +85,28 @@ class MuJoCoForwardKinematics:
                 "AMP motion loading requires `pip install mmrl[amp]`."
             ) from exc
         self._mujoco = mujoco
-        self.model = mujoco.MjModel.from_xml_path(str(urdf_path))
+        urdf_path = Path(urdf_path)
+        urdf_root = ET.parse(urdf_path).getroot()
+        for inertia in urdf_root.findall(".//inertial/inertia"):
+            inertia.attrib.update(
+                {
+                    "ixx": "1",
+                    "ixy": "0",
+                    "ixz": "0",
+                    "iyy": "1",
+                    "iyz": "0",
+                    "izz": "1",
+                }
+            )
+        for mesh in urdf_root.findall(".//mesh"):
+            filename = mesh.attrib.get("filename")
+            if filename and not Path(filename).is_absolute():
+                mesh.attrib["filename"] = str(
+                    (urdf_path.parent / filename).resolve()
+                )
+        self.model = mujoco.MjModel.from_xml_string(
+            ET.tostring(urdf_root, encoding="unicode")
+        )
         self.data = mujoco.MjData(self.model)
         self.joint_addresses = []
         for name in joint_names:
@@ -94,28 +116,64 @@ class MuJoCoForwardKinematics:
             if joint_id < 0:
                 raise ValueError(f"URDF has no joint named {name!r}.")
             self.joint_addresses.append(int(self.model.jnt_qposadr[joint_id]))
-        self.anchor_id = self._body_id(anchor_base)
-        self.link_ids = [self._body_id(name) for name in anchor_links]
+        link_names = {node.attrib["name"] for node in urdf_root.findall("link")}
+        child_names = {
+            node.attrib["link"] for node in urdf_root.findall("joint/child")
+        }
+        root_names = link_names - child_names
+        if len(root_names) != 1:
+            raise ValueError("AMP URDF must contain exactly one root link.")
+        self.root_link = next(iter(root_names))
+        self.joint_by_child = {}
+        for joint in urdf_root.findall("joint"):
+            child = joint.find("child")
+            parent = joint.find("parent")
+            if child is None or parent is None:
+                raise ValueError("AMP URDF joint is missing parent or child.")
+            origin = joint.find("origin")
+            self.joint_by_child[child.attrib["link"]] = (
+                parent.attrib["link"],
+                joint.attrib["type"],
+                _origin_matrix(origin),
+            )
+        self.anchor = self._resolve_link(anchor_base)
+        self.links = [self._resolve_link(name) for name in anchor_links]
 
-    def _body_id(self, name: str) -> int:
+    def _resolve_link(self, name: str) -> tuple[int, np.ndarray]:
+        body_name = "world" if name == self.root_link else name
         body_id = self._mujoco.mj_name2id(
-            self.model, self._mujoco.mjtObj.mjOBJ_BODY, name
+            self.model, self._mujoco.mjtObj.mjOBJ_BODY, body_name
         )
-        if body_id < 0:
-            raise ValueError(f"URDF has no body named {name!r}.")
-        return body_id
+        if body_id >= 0:
+            return body_id, np.eye(4)
+        if name not in self.joint_by_child:
+            raise ValueError(f"URDF has no link named {name!r}.")
+        parent, joint_type, parent_to_link = self.joint_by_child[name]
+        if joint_type != "fixed":
+            raise ValueError(f"Movable URDF link {name!r} is absent in MuJoCo.")
+        parent_id, body_to_parent = self._resolve_link(parent)
+        return parent_id, body_to_parent @ parent_to_link
+
+    def _world_matrix(self, resolver: tuple[int, np.ndarray]) -> np.ndarray:
+        body_id, body_to_link = resolver
+        body_to_world = np.eye(4)
+        body_to_world[:3, :3] = self.data.xmat[body_id].reshape(3, 3)
+        body_to_world[:3, 3] = self.data.xpos[body_id]
+        return body_to_world @ body_to_link
 
     def link_positions(self, joint_positions: np.ndarray) -> np.ndarray:
         result = np.empty(
-            (len(joint_positions), len(self.link_ids), 3), dtype=np.float64
+            (len(joint_positions), len(self.links), 3), dtype=np.float64
         )
         for frame_index, positions in enumerate(joint_positions):
             self.data.qpos[self.joint_addresses] = positions
             self._mujoco.mj_forward(self.model, self.data)
-            anchor_pos = self.data.xpos[self.anchor_id]
-            anchor_rot = self.data.xmat[self.anchor_id].reshape(3, 3)
-            links = self.data.xpos[self.link_ids]
-            result[frame_index] = (links - anchor_pos) @ anchor_rot
+            world_to_anchor = np.linalg.inv(self._world_matrix(self.anchor))
+            for link_index, resolver in enumerate(self.links):
+                link_to_world = self._world_matrix(resolver)
+                result[frame_index, link_index] = (
+                    world_to_anchor @ link_to_world
+                )[:3, 3]
         return result
 
 
@@ -179,16 +237,23 @@ class AMPLoader:
         """Construct from the environment-owned ``cfg.amp`` object."""
         return cls(
             device=device,
-            time_between_frames=require_config_value(cfg, "time_between_frames"),
-            motion_files=require_config_value(cfg, "motion_files"),
-            motion_weights=get_config_value(cfg, "motion_weights", {}),
+            time_between_frames=_required_any(
+                cfg, "time_between_frames", "dt"
+            ),
+            motion_files=_required_any(cfg, "motion_files", "amp_motion_files"),
+            motion_weights=_first_value(
+                cfg, "motion_weights", "amp_motion_weights", default={}
+            ),
             joint_names=require_config_value(cfg, "joint_names"),
-            anchor_base=require_config_value(cfg, "anchor_base"),
-            anchor_links=require_config_value(cfg, "anchor_links"),
+            anchor_base=_required_any(cfg, "anchor_base", "amp_anchor_base"),
+            anchor_links=_required_any(cfg, "anchor_links", "amp_anchor_links"),
             urdf_path=require_config_value(cfg, "urdf_path"),
             preload_transitions=get_config_value(cfg, "preload_transitions", True),
-            num_preload_transitions=get_config_value(
-                cfg, "num_preload_transitions", 1_000_000
+            num_preload_transitions=_first_value(
+                cfg,
+                "num_preload_transitions",
+                "amp_num_preload_transitions",
+                default=1_000_000,
             ),
             forward_kinematics_factory=forward_kinematics_factory,
         )
@@ -252,6 +317,26 @@ def _motion_array(payload, key, path, width, frame_count=None):
     return value
 
 
+def _origin_matrix(origin) -> np.ndarray:
+    if origin is None:
+        return np.eye(4)
+    xyz = np.fromstring(origin.attrib.get("xyz", "0 0 0"), sep=" ")
+    roll, pitch, yaw = np.fromstring(
+        origin.attrib.get("rpy", "0 0 0"), sep=" "
+    )
+    cr, sr = np.cos(roll), np.sin(roll)
+    cp, sp = np.cos(pitch), np.sin(pitch)
+    cy, sy = np.cos(yaw), np.sin(yaw)
+    matrix = np.eye(4)
+    matrix[:3, :3] = (
+        (cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr),
+        (sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr),
+        (-sp, cp * sr, cp * cr),
+    )
+    matrix[:3, 3] = xyz
+    return matrix
+
+
 def _angular_velocity(quaternion, frame_duration):
     velocity = np.zeros((len(quaternion), 3), dtype=np.float64)
     inverse = quaternion[:-1].copy()
@@ -304,3 +389,21 @@ def _interpolate(trajectory: torch.Tensor, frame_positions) -> torch.Tensor:
     high = position.ceil().long()
     blend = (position - low).unsqueeze(-1)
     return (1.0 - blend) * trajectory[low] + blend * trajectory[high]
+
+
+def _first_value(cfg: Any, *names: str, default: Any = None) -> Any:
+    missing = object()
+    for name in names:
+        value = get_config_value(cfg, name, missing)
+        if value is not missing:
+            return value
+    return default
+
+
+def _required_any(cfg: Any, *names: str) -> Any:
+    missing = object()
+    value = _first_value(cfg, *names, default=missing)
+    if value is missing:
+        joined = " or ".join(names)
+        raise KeyError(f"Missing required AMP config value: {joined}")
+    return value

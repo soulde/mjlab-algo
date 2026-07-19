@@ -10,6 +10,7 @@ class _AMPEnv(EnvWrapper):
         self._amp_obs = torch.zeros(2, 3)
         self._critic_obs = torch.zeros(2, 5)
         self.steps = 0
+        self.cfg = type("Cfg", (), {"amp": object()})()
 
     @property
     def num_envs(self):
@@ -82,25 +83,33 @@ def _cfg():
     return cfg
 
 
-def test_amp_runner_trains_saves_loads_and_plays(tmp_path):
+def test_amp_runner_trains_saves_loads_and_plays(tmp_path, monkeypatch):
     expert = TensorAMPDataset(torch.randn(16, 3), torch.randn(16, 3))
-    runner = AMPRunner(_AMPEnv(), _cfg(), expert, tmp_path)
+    monkeypatch.setattr(
+        "mmrl.amp.runner.AMPLoader.from_config",
+        lambda cfg, device: expert,
+    )
+    runner = AMPRunner(_AMPEnv(), _cfg(), tmp_path)
 
     runner.learn()
 
     checkpoint = tmp_path / "models" / "final.pt"
     assert checkpoint.exists()
     assert runner.policy.critic.net[0].in_features == 5
-    restored = AMPRunner(_AMPEnv(), _cfg(), expert, tmp_path / "restored")
+    restored = AMPRunner(_AMPEnv(), _cfg(), tmp_path / "restored")
     restored.load(checkpoint)
     action = restored.get_inference_policy()(torch.zeros(2, 4))
     assert action.shape == (2, 2)
 
 
-def test_amp_runner_rejects_expert_observation_mismatch(tmp_path):
+def test_amp_runner_rejects_expert_observation_mismatch(tmp_path, monkeypatch):
     expert = TensorAMPDataset(torch.randn(8, 2), torch.randn(8, 2))
+    monkeypatch.setattr(
+        "mmrl.amp.runner.AMPLoader.from_config",
+        lambda cfg, device: expert,
+    )
     try:
-        AMPRunner(_AMPEnv(), _cfg(), expert, tmp_path)
+        AMPRunner(_AMPEnv(), _cfg(), tmp_path)
     except ValueError as error:
         assert "does not match environment" in str(error)
     else:

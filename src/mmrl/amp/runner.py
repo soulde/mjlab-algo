@@ -7,10 +7,11 @@ from time import time
 import torch
 
 from mmrl.amp.amp import AMP
+from mmrl.amp.motion_loader import AMPLoader
 from mmrl.config import config_to_dict, get_config_value
 from mmrl.env_wrappers import EnvWrapper
 from mmrl.logging import MetricLogger, format_training_log
-from mmrl.memories import AMPExpertSource, OnPolicyRolloutMemory
+from mmrl.memories import OnPolicyRolloutMemory
 from mmrl.models import AMPDiscriminator
 from mmrl.ppo import ActorCritic
 from mmrl.runners import OnPolicyRunner
@@ -23,7 +24,6 @@ class AMPRunner(OnPolicyRunner):
         self,
         env: EnvWrapper,
         train_cfg,
-        expert_source: AMPExpertSource,
         log_dir: str | Path,
         device: str | torch.device | None = None,
     ) -> None:
@@ -39,6 +39,10 @@ class AMPRunner(OnPolicyRunner):
             "critic", actor_obs, allow_fallback=True
         )
         amp_observation = self._get_observation_set("amp", actor_obs)
+        amp_cfg = get_config_value(env.unwrapped, "cfg.amp")
+        if amp_cfg is None:
+            raise KeyError("AMP environments must provide env.cfg.amp.")
+        expert_source = AMPLoader.from_config(amp_cfg, self.device)
         amp_observation_dim = int(amp_observation.shape[-1])
         if expert_source.observation_dim != amp_observation_dim:
             raise ValueError(

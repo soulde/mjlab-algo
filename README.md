@@ -91,34 +91,40 @@ Environment and memory imports:
 from mmrl.env_wrappers import GymnasiumEnvWrapper
 from mmrl.env_wrappers import MJLabSingleEnvWrapper, MJLabVectorEnvWrapper
 from mmrl.memories import EpisodeMemory, OffPolicyReplayMemory
-from mmrl.memories import AMPExpertSource, TensorAMPDataset
+from mmrl.amp import AMPLoader
 ```
 
 ### AMP Integration
 
-AMP is implemented as a PPO specialization and does not depend on RSL-RL. An
-environment package owns motion-file parsing and passes an expert transition
-source directly to `AMPRunner`:
+AMP is implemented as a PPO specialization and does not depend on RSL-RL.
+`AMPRunner` constructs its expert motion loader directly from `env.cfg.amp`:
 
 ```python
-runner = AMPRunner(env, AMPRunnerCfg(), expert_source, log_dir)
+runner = AMPRunner(env, AMPRunnerCfg(), log_dir)
 runner.learn()
 ```
 
-The expert source exposes the AMP observation dimension and samples consecutive
-expert frames:
+The environment-owned AMP config provides the motion and robot layout:
 
 ```python
-class ExpertSource:
-    observation_dim: int
-
-    def sample(self, batch_size: int, device: torch.device):
-        return AMPTransitionBatch(state, next_state)
+class AMPCfg:
+    dt = 0.02
+    motion_files = ("motions/walk.pkl",)
+    motion_weights = {"walk.pkl": 1.0}
+    joint_names = (...,)
+    anchor_base = "base"
+    anchor_links = ("FL_foot", "FR_foot", "RL_foot", "RR_foot")
+    urdf_path = "robots/go2/go2.urdf"
+    preload_transitions = True
+    num_preload_transitions = 1_000_000
 ```
 
-For already-preprocessed transitions, use `TensorAMPDataset(state,
-next_state)`. Environment-specific motion loaders can implement the same
-contract without being registered with mmrl.
+The loader validates GMR pickle motions, derives velocities, computes
+anchor-relative link positions from the URDF, builds the shared AMP feature
+layout, applies motion weights, interpolates frames, and optionally preloads
+transitions. The reference-style names `amp_motion_files`,
+`amp_motion_weights`, `amp_anchor_base`, `amp_anchor_links`, and
+`amp_num_preload_transitions` are also accepted inside `env.cfg.amp`.
 
 For wrappers without observation-group support, the wrapped environment must
 implement:
