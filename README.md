@@ -202,7 +202,6 @@ as core dependencies, but remain inactive until listed in `logger.backends`.
 src/mmrl/
   env_wrappers/
     base.py
-    gym.py
     gymnasium.py
     isaaclab.py
     mjlab.py

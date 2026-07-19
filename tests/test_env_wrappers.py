@@ -4,7 +4,6 @@ import numpy as np
 import torch
 
 from mmrl.env_wrappers.gymnasium import GymnasiumEnvWrapper
-from mmrl.env_wrappers.gym import GymEnvWrapper
 from mmrl.env_wrappers.isaaclab import IsaacLabEnvWrapper
 
 
@@ -107,39 +106,6 @@ def test_gymnasium_make_delegates_to_gymnasium():
         wrapped = GymnasiumEnvWrapper.make("Pendulum-v1", device="cpu")
 
     assert wrapped.obs_dim == 2
-
-
-class _FakeGymEnv(_FakeGymnasiumEnv):
-    def reset(self):
-        return np.asarray([2.0, -2.0], dtype=np.float32), {}
-
-    def step(self, action):
-        self.last_action = action
-        return (
-            np.asarray([0.0, 1.0], dtype=np.float32),
-            2.5,
-            True,
-            False,
-            {"gym": 1},
-        )
-
-
-def test_gym_wrapper_supports_current_reset_and_step_api():
-    env = _FakeGymEnv()
-    wrapped = GymEnvWrapper(env, device="cpu")
-
-    obs = wrapped.reset()
-    next_obs, reward, done, info = wrapped.step(torch.tensor([[1.0, -1.0]]))
-
-    assert obs.tolist() == [[2.0, -2.0]]
-    np.testing.assert_allclose(env.last_action, np.asarray([2.0, 0.0]))
-    assert next_obs.tolist() == [[0.0, 1.0]]
-    assert reward.tolist() == [2.5]
-    assert done.tolist() == [True]
-    assert info["gym"] == 1
-    assert info["terminated"] is True
-    assert info["truncated"] is False
-    assert info["time_outs"].tolist() == [False]
 
 
 class _FakeIsaacLabEnv:
