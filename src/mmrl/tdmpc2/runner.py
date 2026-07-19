@@ -23,7 +23,7 @@ from mmrl.tdmpc2.tdmpc2 import TDMPC2
 
 
 class TDMPC2Runner(ModelBasedRunner):
-    """Runner for online single-task TD-MPC2 training.
+    """Runner for vectorized online single-task TD-MPC2 training.
 
     Manages the training loop: collects experience, updates
     the agent, evaluates periodically, and logs metrics.
@@ -36,8 +36,6 @@ class TDMPC2Runner(ModelBasedRunner):
         log_dir: Path,
         device: str | torch.device | None = None,
     ):
-        if env.num_envs != 1:
-            raise ValueError("TDMPC2Runner requires a single environment.")
         algorithm_name = get_config_value(train_cfg, "algorithm.class_name")
         model_name = get_config_value(train_cfg, "model.class_name")
         memory_name = get_config_value(train_cfg, "memory.class_name")
@@ -106,8 +104,6 @@ class TDMPC2Runner(ModelBasedRunner):
             self.agent.model.to(self.agent.device)
 
         def policy(obs: torch.Tensor, t0: bool = False) -> torch.Tensor:
-            if obs.ndim > 1 and obs.shape[0] == 1:
-                obs = obs.squeeze(0)
             return self.agent.act(obs, t0=t0, eval_mode=True)
 
         return policy
@@ -187,11 +183,13 @@ class TDMPC2Runner(ModelBasedRunner):
         reward: torch.Tensor | None = None,
         terminated: torch.Tensor | None = None,
     ):
-        """Create a TensorDict for a single timestep."""
+        """Create a TensorDict for one environment timestep."""
         from tensordict import TensorDict
 
         if action is None:
-            action = torch.full_like(self._random_action(), float("nan"))
+            action = torch.full(
+                (self.env.action_dim,), float("nan"), device=obs.device
+            )
         action = action.to(obs.device)
         if reward is None:
             reward = torch.tensor(float("nan"), device=obs.device)
@@ -214,26 +212,30 @@ class TDMPC2Runner(ModelBasedRunner):
 
     def _reset_env(self) -> torch.Tensor:
         obs = self.env.reset()
-        if obs.ndim > 1 and obs.shape[0] == 1:
-            obs = obs.squeeze(0)
+        if obs.shape != (self.env.num_envs, self.env.obs_dim):
+            raise ValueError(
+                "Vector environment reset observations must have shape "
+                f"({self.env.num_envs}, {self.env.obs_dim}), got {tuple(obs.shape)}."
+            )
         return obs
 
     def _step_env(
         self, action: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, bool, dict]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         obs, reward, done, info = self.env.step(action)
-        if obs.ndim > 1 and obs.shape[0] == 1:
-            obs = obs.squeeze(0)
-        reward = reward.reshape(())
-        if isinstance(done, torch.Tensor):
-            done = bool(done.reshape(()).item())
-        return obs, reward, done, info
+        return obs, reward.view(-1), done.view(-1).bool(), info
 
     def _random_action(self) -> torch.Tensor:
-        action = self.env.rand_act()
-        if action.ndim > 1 and action.shape[0] == 1:
-            action = action.squeeze(0)
-        return action
+        return self.env.rand_act()
+
+    @staticmethod
+    def _info_at(info: dict, key: str, index: int, default=0.0):
+        value = info.get(key, default)
+        if isinstance(value, torch.Tensor):
+            return value.reshape(-1)[index]
+        if isinstance(value, (list, tuple, np.ndarray)):
+            return value[index]
+        return value
 
     def eval(self) -> dict:
         """Evaluate agent for ``eval_episodes`` episodes."""
@@ -243,20 +245,26 @@ class TDMPC2Runner(ModelBasedRunner):
         if self.cfg.eval_episodes <= 0:
             return {}
 
-        for _i in range(self.cfg.eval_episodes):
-            obs = self._reset_env()
-            done = False
-            info: dict = {}
-            ep_reward = 0.0
-            t = 0
-            while not done:
-                action = self.agent.act(obs, t0=t == 0, eval_mode=True)
-                obs, reward, done, info = self._step_env(action)
-                ep_reward += float(reward.item())
-                t += 1
-            ep_rewards.append(ep_reward)
-            ep_successes.append(float(info.get("success", 0.0)))
-            ep_lengths.append(t)
+        obs = self._reset_env()
+        rewards = torch.zeros(self.env.num_envs, device=self.device)
+        lengths = torch.zeros(self.env.num_envs, dtype=torch.long, device=self.device)
+        t0 = torch.ones(self.env.num_envs, dtype=torch.bool, device=self.device)
+        while len(ep_rewards) < self.cfg.eval_episodes:
+            action = self.agent.act(obs, t0=t0, eval_mode=True)
+            obs, reward, done, info = self._step_env(action)
+            rewards += reward.to(self.device)
+            lengths += 1
+            for index in done.nonzero(as_tuple=False).flatten().tolist():
+                if len(ep_rewards) >= self.cfg.eval_episodes:
+                    break
+                ep_rewards.append(float(rewards[index]))
+                ep_successes.append(
+                    float(self._info_at(info, "success", index, 0.0))
+                )
+                ep_lengths.append(int(lengths[index]))
+                rewards[index] = 0
+                lengths[index] = 0
+            t0 = done.to(self.device)
 
         return dict(
             episode_reward=np.nanmean(ep_rewards),
@@ -267,66 +275,82 @@ class TDMPC2Runner(ModelBasedRunner):
     def learn(self) -> None:
         """Run the main TD-MPC2 training loop."""
         train_metrics: dict = {}
-        done = True
-        eval_next = False
-        info: dict = {}
         next_log_step = self.cfg.log_freq if self.cfg.log_freq > 0 else -1
+        next_eval_step = 0
+        pretrained = False
 
         print(f"Training on device: {self.agent.device}")
         print(f"Log directory: {self.log_dir}")
 
+        obs = self._reset_env()
+        trajectories = [[self._to_td(obs[index])] for index in range(self.env.num_envs)]
+        episode_rewards = torch.zeros(self.env.num_envs, device=self.device)
+        episode_lengths = torch.zeros(
+            self.env.num_envs, dtype=torch.long, device=self.device
+        )
+        t0 = torch.ones(self.env.num_envs, dtype=torch.bool, device=self.device)
+
         while self._step < self.cfg.steps:
-            # Evaluate periodically
-            if self._step % self.cfg.eval_freq == 0:
-                eval_next = True
-
-            # Reset environment
-            if done:
-                if eval_next:
-                    eval_metrics = self.eval()
-                    eval_metrics.update(self._common_metrics())
-                    self._log(eval_metrics, "eval")
-                    eval_next = False
-
-                if self._step > 0:
-                    if info.get("terminated", False) and not get_config_value(
-                        self.cfg, "algorithm.episodic"
-                    ):
-                        raise ValueError(
-                            "Termination detected but episodic mode is off. "
-                            "Set ``episodic=True`` to enable terminations."
-                        )
-                    train_metrics.update(
-                        episode_reward=torch.stack(
-                            [td["reward"] for td in self._tds[1:]]
-                        ).sum(),
-                        episode_success=float(info.get("success", 0.0)),
-                        episode_length=len(self._tds),
-                        episode_terminated=info.get("terminated", False),
-                    )
-                    train_metrics.update(self._common_metrics())
-                    self._log(train_metrics, "train")
-                    self._ep_idx = self.buffer.add(torch.cat(self._tds))
-
+            if self.cfg.eval_freq > 0 and self._step >= next_eval_step:
+                eval_metrics = self.eval()
+                eval_metrics.update(self._common_metrics())
+                self._log(eval_metrics, "eval")
+                while next_eval_step <= self._step:
+                    next_eval_step += self.cfg.eval_freq
                 obs = self._reset_env()
-                self._tds = [self._to_td(obs)]
+                trajectories = [
+                    [self._to_td(obs[index])] for index in range(self.env.num_envs)
+                ]
+                episode_rewards.zero_()
+                episode_lengths.zero_()
+                t0.fill_(True)
 
-            # Collect experience
             collect_start = time()
             if self._step > self.seed_steps:
-                action = self.agent.act(obs, t0=len(self._tds) == 1)
+                action = self.agent.act(obs, t0=t0)
             else:
                 action = self._random_action()
             obs, reward, done, info = self._step_env(action)
-            self._tds.append(self._to_td(obs, action, reward, info.get("terminated")))
+            terminated = info.get("terminated", done)
+            terminated = torch.as_tensor(terminated, device=self.device).view(-1)
+            episode_rewards += reward.to(self.device)
+            episode_lengths += 1
+            for index in range(self.env.num_envs):
+                trajectories[index].append(
+                    self._to_td(
+                        obs[index], action[index], reward[index], terminated[index]
+                    )
+                )
+            completed_rewards = []
+            completed_lengths = []
+            completed_successes = []
+            for index in done.nonzero(as_tuple=False).flatten().tolist():
+                if bool(terminated[index]) and not get_config_value(
+                    self.cfg, "algorithm.episodic"
+                ):
+                    raise ValueError(
+                        "Termination detected but episodic mode is off. "
+                        "Set ``episodic=True`` to enable terminations."
+                    )
+                self._ep_idx = self.buffer.add(torch.cat(trajectories[index]))
+                completed_rewards.append(float(episode_rewards[index]))
+                completed_lengths.append(int(episode_lengths[index]))
+                completed_successes.append(
+                    float(self._info_at(info, "success", index, 0.0))
+                )
+                trajectories[index] = [self._to_td(obs[index])]
+                episode_rewards[index] = 0
+                episode_lengths[index] = 0
             collect_time = time() - collect_start
 
             # Update agent
             learn_time = 0.0
-            if self._step >= self.seed_steps:
-                if self._step == self.seed_steps:
+            collected_steps = self._step + self.env.num_envs
+            if collected_steps >= self.seed_steps and self.buffer.num_eps > 0:
+                if not pretrained:
                     num_updates = self.seed_steps
                     print("Pretraining agent on seed data...")
+                    pretrained = True
                 else:
                     num_updates = 1
                 learn_start = time()
@@ -339,19 +363,16 @@ class TDMPC2Runner(ModelBasedRunner):
             train_metrics["learning_time"] = learn_time
             train_metrics["iteration_time"] = collect_time + learn_time
 
-            self._step += 1
+            self._step = collected_steps
+            t0 = done.to(self.device)
+            if completed_rewards:
+                train_metrics.update(
+                    episode_reward=float(np.mean(completed_rewards)),
+                    episode_success=float(np.mean(completed_successes)),
+                    episode_length=float(np.mean(completed_lengths)),
+                )
             if self.cfg.log_freq > 0 and self._step >= next_log_step:
                 log_metrics = dict(train_metrics)
-                if len(self._tds) > 1:
-                    log_metrics.setdefault(
-                        "episode_reward",
-                        torch.stack([td["reward"] for td in self._tds[1:]]).sum(),
-                    )
-                    log_metrics.setdefault("episode_length", len(self._tds))
-                    log_metrics.setdefault(
-                        "episode_success",
-                        float(info.get("success", 0.0)),
-                    )
                 log_metrics.update(self._common_metrics())
                 self._log(log_metrics, "train")
                 while next_log_step <= self._step:

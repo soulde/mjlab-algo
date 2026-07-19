@@ -13,8 +13,10 @@ from mmrl.tdmpc2.tdmpc2 import TDMPC2
 
 
 class _FakeEnv:
+    action_dim = 2
+
     def rand_act(self):
-        return torch.zeros(2)
+        return torch.zeros(1, 2)
 
 
 def test_agent_batches_actions_with_independent_planning_history():
@@ -73,13 +75,18 @@ class _RunnerEnv(EnvWrapper):
     unwrapped = _Unwrapped()
 
     def rand_act(self):
-        return torch.zeros(2)
+        return torch.zeros(1, 2)
 
     def reset(self):
-        return torch.zeros(3)
+        return torch.zeros(1, 3)
 
     def step(self, action):
-        return torch.zeros(3), torch.tensor(0.0), True, {}
+        return (
+            torch.zeros(1, 3),
+            torch.tensor([0.0]),
+            torch.tensor([True]),
+            {"terminated": torch.tensor([False])},
+        )
 
     def close(self):
         pass
@@ -163,15 +170,91 @@ def test_runner_accepts_nested_class_style_config(monkeypatch, tmp_path):
     assert runner.buffer._batch_size == 2
 
 
-def test_inference_policy_removes_single_environment_batch_dimension():
+def test_inference_policy_preserves_environment_batch_dimension():
     class FakeAgent:
         def act(self, obs, **kwargs):
-            assert obs.shape == (3,)
-            return torch.zeros(2)
+            assert obs.shape == (1, 3)
+            return torch.zeros(1, 2)
 
     runner = object.__new__(TDMPC2Runner)
     runner.agent = FakeAgent()
 
     action = runner.get_inference_policy()(torch.zeros(1, 3), t0=True)
 
-    assert action.shape == (2,)
+    assert action.shape == (1, 2)
+
+
+def test_learn_stores_asynchronously_completed_vector_episodes():
+    class VectorEnv:
+        num_envs = 2
+        obs_dim = 1
+        action_dim = 1
+        device = torch.device("cpu")
+
+        def __init__(self):
+            self.step_count = 0
+
+        def reset(self):
+            return torch.zeros(2, 1)
+
+        def rand_act(self):
+            return torch.zeros(2, 1)
+
+        def step(self, action):
+            self.step_count += 1
+            done = {
+                1: [True, False],
+                2: [False, True],
+                3: [True, False],
+            }[self.step_count]
+            return (
+                torch.full((2, 1), float(self.step_count)),
+                torch.ones(2),
+                torch.tensor(done),
+                {"terminated": torch.zeros(2, dtype=torch.bool)},
+            )
+
+    class Memory:
+        def __init__(self):
+            self.episodes = []
+
+        @property
+        def num_eps(self):
+            return len(self.episodes)
+
+        def add(self, episode):
+            self.episodes.append(episode)
+            return len(self.episodes)
+
+    class Logger:
+        def close(self):
+            pass
+
+    runner = object.__new__(TDMPC2Runner)
+    runner.env = VectorEnv()
+    runner.device = torch.device("cpu")
+    runner.cfg = SimpleNamespace(
+        steps=6,
+        seed_steps=100,
+        eval_freq=100,
+        eval_episodes=0,
+        log_freq=0,
+        save_agent=False,
+        algorithm=SimpleNamespace(episodic=False),
+    )
+    runner.train_cfg = runner.cfg
+    runner.agent = SimpleNamespace(device=torch.device("cpu"))
+    runner.buffer = Memory()
+    runner.logger = Logger()
+    runner.log_dir = None
+    runner._step = 0
+    runner._ep_idx = 0
+    runner.seed_steps = 100
+    runner._start_time = 0.0
+    runner.eval = lambda: {}
+    runner._log = lambda metrics, category: None
+
+    runner.learn()
+
+    assert runner._step == 6
+    assert [episode.shape[0] for episode in runner.buffer.episodes] == [2, 3, 3]
