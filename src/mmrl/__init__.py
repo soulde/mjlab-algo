@@ -5,6 +5,12 @@ from mmrl.config import (
     get_config_value,
     require_config_value,
 )
+from mmrl.amp import (
+    AMPAlgorithmCfg,
+    AMPDiscriminatorCfg,
+    AMPMemoryCfg,
+    AMPRunnerCfg,
+)
 from mmrl.fastsac import (
     FastSAC,
     FastSACActorCfg,
@@ -33,6 +39,12 @@ from mmrl.tdmpc2.config import (
 )
 
 __all__ = [
+    "AMP",
+    "AMPAlgorithmCfg",
+    "AMPDiscriminatorCfg",
+    "AMPMemoryCfg",
+    "AMPRunner",
+    "AMPRunnerCfg",
     "FastSAC",
     "FastSACActorCfg",
     "FastSACAlgorithmCfg",
@@ -63,6 +75,14 @@ __all__ = [
 
 
 def __getattr__(name: str):
+    if name == "AMP":
+        from mmrl.amp import AMP
+
+        return AMP
+    if name == "AMPRunner":
+        from mmrl.amp import AMPRunner
+
+        return AMPRunner
     if name == "TDMPC2":
         from mmrl.tdmpc2 import TDMPC2
 
